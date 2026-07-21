@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+src-tauri/target/
+src-tauri/gen/
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.db
+*.db-shm
+*.db-wal
