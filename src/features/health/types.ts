@@ -1,6 +1,13 @@
-export const REMINDER_IDS = ['stand', 'water', 'pelvic_floor', 'eye_rest', 'posture'] as const
-export type ReminderId = (typeof REMINDER_IDS)[number]
+export const DEFAULT_REMINDER_IDS = ['stand', 'water', 'pelvic_floor', 'eye_rest', 'posture'] as const
+export type ReminderId = string
 export type ReminderAction = 'completed' | 'snoozed' | 'dismissed' | 'auto_hidden'
+
+export interface NewReminderInput {
+  title: string
+  message: string
+  intervalMinutes: number
+  enabled: boolean
+}
 
 export interface ReminderConfig {
   id: ReminderId

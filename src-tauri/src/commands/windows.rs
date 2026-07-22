@@ -91,6 +91,14 @@ fn emit_panel_navigation(panel: &WebviewWindow, category: &str) -> Result<(), St
         .map_err(|_| "panel_navigation_failed".to_owned())
 }
 
+fn valid_reminder_id(reminder_id: &str) -> bool {
+    !reminder_id.is_empty()
+        && reminder_id.len() <= 128
+        && reminder_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+}
+
 fn show_panel(app: &tauri::AppHandle, category: &str) -> Result<(), String> {
     let panel = app
         .get_webview_window(PANEL_WINDOW)
@@ -175,6 +183,8 @@ pub fn toggle_orb_visibility(app: &tauri::AppHandle) -> Result<(), String> {
     if visible {
         orb.hide().map_err(|_| "orb_hide_failed".to_owned())
     } else {
+        orb.set_ignore_cursor_events(false)
+            .map_err(|_| "orb_cursor_events_restore_failed".to_owned())?;
         orb.show().map_err(|_| "orb_show_failed".to_owned())?;
         orb.set_focus().map_err(|_| "orb_focus_failed".to_owned())
     }
@@ -214,10 +224,7 @@ pub fn trigger_health_debug_reminder(
     app: tauri::AppHandle,
     reminder_id: String,
 ) -> Result<(), String> {
-    if !matches!(
-        reminder_id.as_str(),
-        "stand" | "water" | "pelvic_floor" | "eye_rest" | "posture"
-    ) {
+    if !valid_reminder_id(&reminder_id) {
         return Err("unknown_reminder_id".to_owned());
     }
     let panel = app
@@ -266,6 +273,8 @@ pub fn set_orb_expanded(
         .outer_size()
         .map_err(|_| "orb_size_read_failed".to_owned())?;
     if !expanded {
+        orb.set_ignore_cursor_events(false)
+            .map_err(|_| "orb_cursor_events_restore_failed".to_owned())?;
         let current_logical_size = current_size.to_logical::<f64>(scale);
         let local_x = anchor_x.unwrap_or(current_logical_size.width / 2.0);
         let local_y = anchor_y.unwrap_or(current_logical_size.height / 2.0);
@@ -518,7 +527,19 @@ pub fn position_orb_at_default(app: &tauri::AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{expanded_orb_placement, panel_size, COLLAPSED_ORB_SIZE, EXPANDED_ORB_SIZE};
+    use super::{
+        expanded_orb_placement, panel_size, valid_reminder_id, COLLAPSED_ORB_SIZE,
+        EXPANDED_ORB_SIZE,
+    };
+
+    #[test]
+    fn accepts_default_and_generated_reminder_ids() {
+        assert!(valid_reminder_id("stand"));
+        assert!(valid_reminder_id("8a741fc8-3f25-4b5f-99db-80722b0dbdfa"));
+        assert!(!valid_reminder_id(""));
+        assert!(!valid_reminder_id("id with spaces"));
+        assert!(!valid_reminder_id(&"x".repeat(129)));
+    }
 
     #[test]
     fn accepts_only_known_panel_destinations() {

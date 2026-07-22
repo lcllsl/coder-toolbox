@@ -5,6 +5,7 @@ import { useHealthStore } from '@/app/stores/health'
 import {
   calculateNextTriggerAt,
   createDefaultReminders,
+  createReminderConfig,
   getDueReminderIds,
   isHealthSuppressed,
   isInQuietHours,
@@ -27,6 +28,18 @@ describe('health reminder scheduler', () => {
     const now = new Date('2026-07-21T08:00:00Z')
     expect(calculateNextTriggerAt({ intervalMinutes: 50, snoozeMinutes: 10 }, 'interval', now)).toBe('2026-07-21T08:50:00.000Z')
     expect(calculateNextTriggerAt({ intervalMinutes: 50, snoozeMinutes: 10 }, 'snooze', now)).toBe('2026-07-21T08:10:00.000Z')
+  })
+
+  it('creates validated custom reminders and schedules them after default priorities', () => {
+    const now = new Date('2026-07-21T08:00:00Z')
+    const custom = createReminderConfig('custom-stretch', {
+      title: '  伸展肩颈  ', message: '  放松肩膀和颈部。  ', intervalMinutes: 25, enabled: true,
+    }, now)
+    expect(custom).toMatchObject({ id: 'custom-stretch', title: '伸展肩颈', message: '放松肩膀和颈部。', intervalMinutes: 25, snoozeMinutes: 10, enabled: true })
+    const reminders = [custom, ...createDefaultReminders(now).map((item) => ({ ...item, enabled: item.id === 'stand', nextTriggerAt: now.toISOString() }))]
+    custom.nextTriggerAt = now.toISOString()
+    expect(getDueReminderIds(reminders, now)).toEqual(['stand', 'custom-stretch'])
+    expect(() => createReminderConfig('invalid', { title: '', message: '介绍', intervalMinutes: 4, enabled: true }, now)).toThrow()
   })
 
   it('handles quiet hours that cross midnight', () => {
@@ -99,5 +112,24 @@ describe('health reminder actions', () => {
 
     expect(store.pendingIds).toEqual(['stand'])
     expect(new Date(store.settings.reminders.find((item) => item.id === 'eye_rest')!.nextTriggerAt!).getTime()).toBeGreaterThan(now.getTime())
+  })
+
+  it('adds and deletes default or custom reminder projects', async () => {
+    const store = useHealthStore()
+    const now = new Date('2026-07-21T10:00:00Z')
+    const custom = await store.addReminder({ title: '伸展肩颈', message: '活动一下肩颈。', intervalMinutes: 25, enabled: true }, now)
+    expect(store.settings.reminders.at(-1)).toMatchObject({ id: custom.id, title: '伸展肩颈', intervalMinutes: 25 })
+    await expect(store.updateReminder(custom.id, { intervalMinutes: 1 })).rejects.toThrow('reminder_interval_invalid')
+    expect(store.settings.reminders.at(-1)?.intervalMinutes).toBe(25)
+
+    store.pendingIds = ['stand', custom.id]
+    store.completedToday.stand = 2
+    await store.deleteReminder('stand')
+    expect(store.settings.reminders.some((item) => item.id === 'stand')).toBe(false)
+    expect(store.pendingIds).toEqual([custom.id])
+    expect(store.completedToday.stand).toBeUndefined()
+
+    await store.deleteReminder(custom.id)
+    expect(store.settings.reminders.some((item) => item.id === custom.id)).toBe(false)
   })
 })

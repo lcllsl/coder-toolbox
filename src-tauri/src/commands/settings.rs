@@ -26,6 +26,7 @@ fn register_shortcut(app: &tauri::AppHandle, shortcut: &str) -> Result<(), Strin
             if let Some(orb) = app.get_webview_window("orb-window") {
                 let visible = orb.is_visible().unwrap_or(true);
                 if !visible {
+                    let _ = orb.set_ignore_cursor_events(false);
                     let _ = orb.show();
                     let _ = orb.set_focus();
                 } else {

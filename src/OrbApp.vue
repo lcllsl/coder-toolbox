@@ -85,7 +85,7 @@ const stageStyle = computed(() => ({
 let dragSession: DragSession | null = null
 let edgeTimer: number | undefined
 let transitionTimer: number | undefined
-let stopHitTest: (() => void) | undefined
+let stopHitTest: (() => Promise<void>) | undefined
 let unlistenPanelClosed: (() => void) | undefined
 let unlistenHealthSettings: (() => void) | undefined
 let unlistenHealthDebug: (() => void) | undefined
@@ -151,14 +151,15 @@ async function restoreFromEdge() {
   }
 }
 
-function enableExpandedHitTest() {
-  stopHitTest?.()
+async function enableExpandedHitTest() {
+  await disableExpandedHitTest()
   stopHitTest = startOrbHitTest(() => hitRegions.value)
 }
 
-function disableExpandedHitTest() {
-  stopHitTest?.()
+async function disableExpandedHitTest() {
+  const stop = stopHitTest
   stopHitTest = undefined
+  await stop?.()
 }
 
 async function openPetalsFromCurrentState() {
@@ -169,7 +170,7 @@ async function openPetalsFromCurrentState() {
     orbStore.setGeometry(nextGeometry)
     renderPetals.value = true
     await nextTick()
-    enableExpandedHitTest()
+    await enableExpandedHitTest()
     transitionTimer = window.setTimeout(() => {
       orbStore.transitionTo('petals-open')
     }, transitionDuration(OPEN_DURATION))
@@ -193,14 +194,14 @@ async function openReminderCard() {
     orbStore.setGeometry(nextGeometry)
   }
   await nextTick()
-  enableExpandedHitTest()
+  await enableExpandedHitTest()
   clearReminderCardTimer()
   reminderCardTimer = window.setTimeout(() => void autoHideReminder(), 30_000)
 }
 
 async function closeReminderWindow() {
   clearReminderCardTimer()
-  disableExpandedHitTest()
+  await disableExpandedHitTest()
   if (orbStore.geometry) await setOrbExpanded(false, orbStore.geometry)
   orbStore.setGeometry(null)
   if (orbStore.uiState === 'reminder') orbStore.transitionTo('idle')
@@ -235,7 +236,7 @@ async function autoHideReminder() {
 async function closePetals() {
   if (!orbStore.transitionTo('petals-closing')) return
   clearTransitionTimer()
-  disableExpandedHitTest()
+  await disableExpandedHitTest()
   renderPetals.value = false
   await new Promise((resolve) => window.setTimeout(resolve, transitionDuration(CLOSE_DURATION)))
   await setOrbExpanded(false, orbStore.geometry)
@@ -300,7 +301,7 @@ async function applyRuntimeMode(mode: AppMode) {
 async function selectCategory(category: PanelCategory) {
   if (!orbStore.transitionTo('panel-opening')) return
   clearTransitionTimer()
-  disableExpandedHitTest()
+  await disableExpandedHitTest()
   renderPetals.value = false
 
   try {
@@ -313,7 +314,7 @@ async function selectCategory(category: PanelCategory) {
     const nextGeometry = await setOrbExpanded(true, undefined, orbStore.snappedEdge)
     orbStore.setGeometry(nextGeometry)
     renderPetals.value = true
-    enableExpandedHitTest()
+    await enableExpandedHitTest()
     orbStore.transitionTo('petals-open')
     console.error('Unable to open panel window', error)
   }
@@ -439,7 +440,7 @@ onUnmounted(() => {
   clearReminderCardTimer()
   clearClickTimer()
   if (healthTimer !== undefined) window.clearInterval(healthTimer)
-  disableExpandedHitTest()
+  void disableExpandedHitTest()
   unlistenPanelClosed?.()
   unlistenHealthSettings?.()
   unlistenHealthDebug?.()

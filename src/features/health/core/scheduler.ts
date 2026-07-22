@@ -1,4 +1,4 @@
-import type { HealthSettings, QuietHours, ReminderConfig, ReminderId } from '../types'
+import type { HealthSettings, NewReminderInput, QuietHours, ReminderConfig, ReminderId } from '../types'
 import { REMINDER_PRIORITY } from '../types'
 
 const MINUTE = 60_000
@@ -15,6 +15,26 @@ export function createDefaultReminders(now = new Date()): ReminderConfig[] {
     ...config,
     nextTriggerAt: new Date(now.getTime() + config.intervalMinutes * MINUTE).toISOString(),
   }))
+}
+
+export function createReminderConfig(id: ReminderId, input: NewReminderInput, now = new Date()): ReminderConfig {
+  const title = input.title.trim()
+  const message = input.message.trim()
+  const intervalMinutes = Math.round(input.intervalMinutes)
+  if (!title) throw new Error('reminder_title_required')
+  if (!message) throw new Error('reminder_message_required')
+  if (!Number.isFinite(intervalMinutes) || intervalMinutes < 5 || intervalMinutes > 1_440) {
+    throw new Error('reminder_interval_invalid')
+  }
+  return {
+    id,
+    title,
+    message,
+    intervalMinutes,
+    snoozeMinutes: 10,
+    enabled: input.enabled,
+    nextTriggerAt: new Date(now.getTime() + intervalMinutes * MINUTE).toISOString(),
+  }
 }
 
 export function localDateKey(date = new Date()): string {
@@ -58,7 +78,9 @@ export function getDueReminderIds(configs: readonly ReminderConfig[], now = new 
       .filter((config) => config.enabled && config.nextTriggerAt && new Date(config.nextTriggerAt).getTime() <= now.getTime())
       .map((config) => config.id),
   )
-  return REMINDER_PRIORITY.filter((id) => due.has(id))
+  const configuredOrder = configs.map((config) => config.id)
+  const orderedIds = [...REMINDER_PRIORITY, ...configuredOrder.filter((id) => !REMINDER_PRIORITY.includes(id))]
+  return orderedIds.filter((id) => due.has(id))
 }
 
 export function rescheduleReminder(config: ReminderConfig, action: 'interval' | 'snooze', now = new Date()): ReminderConfig {

@@ -146,13 +146,52 @@ export async function onOrbPanelClosed(
   })
 }
 
-export function startOrbHitTest(getRegions: () => readonly HitRegion[]): () => void {
-  if (!isTauriRuntime()) return () => undefined
+export interface CursorEventGate {
+  setIgnoring(ignore: boolean): Promise<void>
+  stop(): Promise<void>
+}
+
+export function createCursorEventGate(
+  applyIgnoreState: (ignore: boolean) => Promise<void>,
+): CursorEventGate {
+  let stopped = false
+  let operation = Promise.resolve()
+  let stopOperation: Promise<void> | undefined
+
+  const enqueue = (ignore: boolean, force = false) => {
+    operation = operation
+      .catch(() => undefined)
+      .then(async () => {
+        if (stopped && ignore && !force) return
+        await applyIgnoreState(ignore)
+      })
+    return operation
+  }
+
+  return {
+    setIgnoring(ignore) {
+      if (stopped) return operation
+      return enqueue(ignore)
+    },
+    stop() {
+      if (stopOperation) return stopOperation
+      stopped = true
+      stopOperation = enqueue(false, true).catch(() => enqueue(false, true))
+      return stopOperation
+    },
+  }
+}
+
+export function startOrbHitTest(getRegions: () => readonly HitRegion[]): () => Promise<void> {
+  if (!isTauriRuntime()) return async () => undefined
 
   const appWindow = getCurrentWindow()
   let stopped = false
   let checking = false
   let currentlyIgnoring = false
+  const cursorEventGate = createCursorEventGate((ignore) =>
+    appWindow.setIgnoreCursorEvents(ignore),
+  )
 
   const check = async () => {
     if (stopped || checking) return
@@ -167,15 +206,16 @@ export function startOrbHitTest(getRegions: () => readonly HitRegion[]): () => v
         x: (cursor.x - position.x) / scaleFactor,
         y: (cursor.y - position.y) / scaleFactor,
       }
+      if (stopped) return
       const shouldReceiveEvents = getRegions().some((region) => containsPoint(region, localPoint))
       const shouldIgnore = !shouldReceiveEvents
       if (shouldIgnore !== currentlyIgnoring) {
-        await appWindow.setIgnoreCursorEvents(shouldIgnore)
+        await cursorEventGate.setIgnoring(shouldIgnore)
         currentlyIgnoring = shouldIgnore
       }
     } catch {
-      if (currentlyIgnoring) {
-        await appWindow.setIgnoreCursorEvents(false).catch(() => undefined)
+      if (!stopped) {
+        await cursorEventGate.setIgnoring(false).catch(() => undefined)
         currentlyIgnoring = false
       }
     } finally {
@@ -186,10 +226,10 @@ export function startOrbHitTest(getRegions: () => readonly HitRegion[]): () => v
   const timer = window.setInterval(check, 48)
   void check()
 
-  return () => {
+  return async () => {
     stopped = true
     window.clearInterval(timer)
-    void appWindow.setIgnoreCursorEvents(false).catch(() => undefined)
+    await cursorEventGate.stop().catch(() => undefined)
   }
 }
 

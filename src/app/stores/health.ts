@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { publishHealthSettingsChanged } from '@/services/tauri/health'
 import {
   calculateNextTriggerAt,
+  createReminderConfig,
   getDueReminderIds,
   isHealthSuppressed,
   localDateKey,
@@ -18,7 +19,7 @@ import {
   clearReminderLogs,
   getTodayCompletedCounts,
 } from '@/features/health/repositories/reminder-log-repository'
-import type { HealthSettings, ReminderConfig, ReminderId } from '@/features/health/types'
+import type { HealthSettings, NewReminderInput, ReminderConfig, ReminderId } from '@/features/health/types'
 
 export const useHealthStore = defineStore('health', {
   state: () => ({
@@ -40,23 +41,46 @@ export const useHealthStore = defineStore('health', {
   actions: {
     async initialize() {
       this.settings = await loadHealthSettings()
-      this.completedToday = await getTodayCompletedCounts()
+      const completed = await getTodayCompletedCounts()
+      this.completedToday = Object.fromEntries(
+        this.settings.reminders.flatMap((reminder) => completed[reminder.id] === undefined ? [] : [[reminder.id, completed[reminder.id]]]),
+      )
       this.initialized = true
     },
     async reloadSettings() {
       this.settings = await loadHealthSettings()
+      const validIds = new Set(this.settings.reminders.map((reminder) => reminder.id))
+      this.pendingIds = this.pendingIds.filter((id) => validIds.has(id))
+      this.cardVisible = this.cardVisible && this.pendingIds.length > 0
     },
     async persist(notify = true) {
       await saveHealthSettings(this.settings)
       if (notify) await publishHealthSettingsChanged()
     },
     async updateReminder(id: ReminderId, patch: Partial<Pick<ReminderConfig, 'enabled' | 'intervalMinutes' | 'snoozeMinutes'>>) {
+      if (patch.intervalMinutes !== undefined && (!Number.isFinite(patch.intervalMinutes) || patch.intervalMinutes < 5 || patch.intervalMinutes > 1_440)) {
+        throw new Error('reminder_interval_invalid')
+      }
       const now = new Date()
       this.settings.reminders = this.settings.reminders.map((reminder) =>
         reminder.id === id
           ? { ...reminder, ...patch, nextTriggerAt: calculateNextTriggerAt({ ...reminder, ...patch }, 'interval', now) }
           : reminder,
       )
+      await this.persist()
+    },
+    async addReminder(input: NewReminderInput, now = new Date()) {
+      const reminder = createReminderConfig(crypto.randomUUID(), input, now)
+      this.settings.reminders = [...this.settings.reminders, reminder]
+      await this.persist()
+      return reminder
+    },
+    async deleteReminder(id: ReminderId) {
+      if (!this.settings.reminders.some((reminder) => reminder.id === id)) return
+      this.settings.reminders = this.settings.reminders.filter((reminder) => reminder.id !== id)
+      this.pendingIds = this.pendingIds.filter((pendingId) => pendingId !== id)
+      delete this.completedToday[id]
+      this.cardVisible = this.cardVisible && this.pendingIds.length > 0
       await this.persist()
     },
     async setSilentMode(enabled: boolean) {

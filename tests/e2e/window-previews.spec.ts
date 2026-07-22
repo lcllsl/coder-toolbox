@@ -256,7 +256,7 @@ test('developer tools format and copy JSON, and expose six tools', async ({ page
   await expect(page.getByRole('heading', { name: 'UUID 生成' })).toBeVisible()
 })
 
-test('health panel configures five reminders and common pause policies', async ({ page }) => {
+test('health panel manages reminder projects and common pause policies', async ({ page }) => {
   await page.setViewportSize({ width: 520, height: 560 })
   await page.goto('/?window=panel')
   await page.evaluate(() => {
@@ -268,6 +268,20 @@ test('health panel configures five reminders and common pause policies', async (
   await expect(page.getByRole('checkbox', { name: '提肛训练提醒' })).not.toBeChecked()
   await expect(page.locator('.reminder-field').first()).toBeVisible()
   await expect(page.getByRole('button', { name: /立即调试.+提醒/ })).toHaveCount(5)
+  await page.getByRole('button', { name: '新增提醒' }).click()
+  await page.getByLabel('项目标题').fill('伸展肩颈')
+  await page.getByLabel('项目介绍').fill('活动肩膀和颈部，放松一下。')
+  await page.getByLabel('新增提醒间隔时间').fill('25')
+  await page.getByRole('button', { name: '新增项目' }).click()
+  await expect(page.getByText('提醒项目已新增')).toBeVisible()
+  await expect(page.locator('.reminder-row')).toHaveCount(6)
+  await expect(page.getByRole('checkbox', { name: '伸展肩颈提醒' })).toBeChecked()
+  await expect(page.getByLabel('伸展肩颈间隔时间')).toHaveValue('25')
+  await page.getByRole('button', { name: '删除坐姿调整提醒' }).click()
+  await expect(page.getByRole('alertdialog', { name: '删除提醒项目？' })).toBeVisible()
+  await page.getByRole('button', { name: '删除', exact: true }).click()
+  await expect(page.locator('.reminder-row')).toHaveCount(5)
+  await expect(page.getByText('坐姿调整', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: 'test-results/health-stage5.png', omitBackground: true })
   await page.locator('html').evaluate((element) => { element.dataset.theme = 'dark' })
   await page.locator('.health-policies').scrollIntoViewIfNeeded()
