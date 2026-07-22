@@ -231,3 +231,4 @@
 - `pnpm tauri build --bundles app` 在当前 Apple Silicon macOS 设备通过，生成包含应用图标的 `花瓣工具箱.app`，应用包约 17 MB。
 - 已补齐 README、架构说明、用户说明和发布检查清单，并明确本地数据范围、退出方式和平台限制。
 - 尚未执行 Windows 11 x64 的原生窗口、多显示器、WebView2、全局快捷键、开机启动、外部应用启动、NSIS/MSI 安装与卸载验证；不得据此发布 `1.0.0`。
+- Windows NSIS 首轮实机反馈发现 release 可执行文件附带控制台窗口；入口已在非 debug 构建启用 Windows GUI 子系统，避免关闭控制台导致工具退出，同时开发调试模式继续保留终端日志。
