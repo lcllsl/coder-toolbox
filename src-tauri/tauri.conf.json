@@ -53,7 +53,7 @@
     ],
     "security": {
       "capabilities": ["orb", "panel"],
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self'"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'"
     }
   },
   "bundle": {
