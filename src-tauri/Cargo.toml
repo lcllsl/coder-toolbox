@@ -1,8 +1,8 @@
 [package]
-name = "petal-toolbox"
+name = "maopao"
 version = "0.1.0"
-description = "常驻桌面边缘的悬浮花瓣工具箱"
-authors = ["Petal Toolbox Contributors"]
+description = "常驻桌面边缘的冒泡工具箱"
+authors = ["Maopao Contributors"]
 edition = "2021"
 
 [lib]

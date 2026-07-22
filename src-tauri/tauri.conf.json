@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "花瓣工具箱",
+  "productName": "冒泡",
   "version": "0.1.0",
   "identifier": "com.petaltoolbox.desktop",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "orb-window",
-        "title": "花瓣工具箱",
+        "title": "冒泡",
         "url": "index.html?window=orb",
         "width": 88,
         "height": 88,
@@ -33,7 +33,7 @@
       },
       {
         "label": "panel-window",
-        "title": "花瓣工具箱",
+        "title": "冒泡",
         "url": "index.html?window=panel",
         "width": 560,
         "height": 540,

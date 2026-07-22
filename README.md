@@ -1,4 +1,4 @@
-# 花瓣工具箱
+# 冒泡
 
 一个常驻桌面边缘、低打扰、打开即用的办公与开发辅助工具箱。当前版本为 `0.1.0` 开发阶段，Windows 11 x64 是第一版验收平台，macOS 用作前期跨平台开发与验证环境。
 
@@ -11,7 +11,7 @@
 - 系统托盘、窗口显隐、面板分类定向通信。
 - 设计令牌、浅深色和 reduced-motion 基线。
 - Vitest 与 Playwright 测试骨架。
-- 原创 SVG 应用图标及 Tauri 桌面打包图标。
+- “冒泡”紫色气泡透明图标及 Tauri 全平台打包图标。
 - 5 px 拖动阈值、四边吸附、220 ms 吸附动画与空闲半隐藏。
 - 根据当前显示器工作区选择方向的五花瓣扇形布局。
 - 明确的动画状态机、错峰展开/收回和 reduced-motion 降级。
@@ -20,7 +20,7 @@
 - 五类独立功能面板、通用标题栏、主题、Toast、Confirm 与 Tooltip。
 - 健康提醒、文本与图片剪贴板、六项开发转换、文件与路径、快捷入口五类模块。
 - 全局快捷键、悬浮球双击动作、开机启动、三种运行模式和本地数据清理。
-- 46 个前端单元测试、7 个 Rust 测试与 18 个浏览器交互场景。
+- 53 个前端单元测试、7 个 Rust 测试与 19 个浏览器交互场景。
 
 使用方法见 [用户说明](docs/user-guide.md)，详细状态见 [开发进度](docs/progress.md)，完整需求见 [产品说明](docs/product-spec.md)。
 
@@ -72,7 +72,7 @@ macOS 应用打包：
 pnpm tauri build --bundles app
 ```
 
-产物位于 `src-tauri/target/release/bundle/macos/花瓣工具箱.app`。Windows 安装包必须在 Windows 11 x64 上执行 `pnpm tauri build`，详见 [发布检查清单](docs/release-checklist.md)。
+产物位于 `src-tauri/target/release/bundle/macos/冒泡.app`。Windows 安装包必须在 Windows 11 x64 上执行 `pnpm tauri build`，详见 [发布检查清单](docs/release-checklist.md)。
 
 ## 隐私与安全
 

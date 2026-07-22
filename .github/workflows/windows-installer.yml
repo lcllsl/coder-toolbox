@@ -63,7 +63,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: petal-toolbox-windows-x64-installer
+          name: maopao-windows-x64-installer
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14

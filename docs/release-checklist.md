@@ -12,7 +12,7 @@
 - [x] Rust Clippy 使用 `-D warnings` 通过。
 - [x] Vite 生产构建通过，主脚本 gzip 98.14 kB。
 - [x] Tauri release 编译通过。
-- [x] 生成包含应用图标的 `src-tauri/target/release/bundle/macos/花瓣工具箱.app`，约 17 MB。
+- [x] 生成包含旧版应用图标的 macOS 测试包；更名后的 `冒泡.app` 与新图标仍待重新打包验证。
 - [x] README、架构说明、用户说明和已知平台限制已更新。
 - [x] 未引入遥测或在线内容处理；敏感正文和文件二进制未写入普通日志。
 

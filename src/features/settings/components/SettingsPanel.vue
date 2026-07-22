@@ -26,7 +26,7 @@ let unlistenTrayMode: (() => void) | undefined
 
 const sizeLabel = computed(() => `${settings.settings.orbSize}px`)
 const opacityLabel = computed(() => `${Math.round(settings.settings.orbOpacity * 100)}%`)
-const confirmTitle = computed(() => confirmAction.value === 'exit' ? '退出花瓣工具箱？' : '清除全部本地数据？')
+const confirmTitle = computed(() => confirmAction.value === 'exit' ? '退出冒泡？' : '清除全部本地数据？')
 const confirmMessage = computed(() => {
   if (confirmAction.value === 'exit') return '退出后剪贴板监听和健康提醒都会停止，可再次手动启动应用。'
   if (confirmAction.value === 'clear-reset') return '将删除剪贴板历史、图片缓存、提醒统计、临时中转和最近使用，并恢复所有设置。原始文件不会被删除。'

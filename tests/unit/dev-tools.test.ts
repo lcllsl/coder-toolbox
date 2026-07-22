@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { decodeBase64Utf8, encodeBase64Utf8, normalizeBase64 } from '@/features/dev-tools/core/base64'
 import { formatJson, JsonInputError, minifyJson } from '@/features/dev-tools/core/json'
-import { parseJwt } from '@/features/dev-tools/core/jwt'
+import { decodeQrPixels, generateQrDataUrl, validateQrContent } from '@/features/dev-tools/core/qr-code'
 import { dateTimeToTimestamp, parseTimestamp } from '@/features/dev-tools/core/timestamp'
 import { detectUrlEncoding, transformUrl } from '@/features/dev-tools/core/url'
 import { generateUuids } from '@/features/dev-tools/core/uuid'
@@ -65,20 +65,16 @@ describe('timestamp tools', () => {
   })
 })
 
-describe('JWT tools', () => {
-  const segment = (value: unknown) =>
-    btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-
-  it('parses claims and identifies expired tokens without validating signatures', () => {
-    const token = `${segment({ alg: 'none' })}.${segment({ sub: '42', exp: 100, iat: 10 })}.signature`
-    const result = parseJwt(token, 101_000)
-    expect(result.payload.sub).toBe('42')
-    expect(result.claims.iat?.value).toBe(10)
-    expect(result.expired).toBe(true)
+describe('QR code tools', () => {
+  it('generates a local PNG data URL without changing the source text', async () => {
+    const source = 'https://example.com/花瓣?count=6'
+    expect(validateQrContent(source)).toBe(source)
+    await expect(generateQrDataUrl(source)).resolves.toMatch(/^data:image\/png;base64,/)
   })
 
-  it('rejects malformed tokens', () => {
-    expect(() => parseJwt('not-a-token')).toThrow('三个点分隔部分')
+  it('rejects empty content and pixels without a QR code', async () => {
+    expect(() => validateQrContent('')).toThrow('请输入')
+    await expect(decodeQrPixels({ data: new Uint8ClampedArray(16), width: 2, height: 2 })).rejects.toThrow('未在图片中识别到二维码')
   })
 })
 

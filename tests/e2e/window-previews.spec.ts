@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('orb preview exposes exactly five categories', async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 340 })
   await page.goto('/?window=orb&placement=bottom-right')
-  await page.getByRole('button', { name: '展开花瓣工具箱' }).click()
+  await page.getByRole('button', { name: '展开冒泡' }).click()
   await expect(page.locator('.petal')).toHaveCount(5)
   await expect(page.locator('.petal-position')).toHaveCount(5)
   await page.waitForTimeout(650)
@@ -15,7 +15,7 @@ test('top and bottom edges expand as centered semicircles', async ({ page }) => 
 
   for (const placement of ['top', 'bottom']) {
     await page.goto(`/?window=orb&placement=${placement}`)
-    await page.getByRole('button', { name: '展开花瓣工具箱' }).click()
+    await page.getByRole('button', { name: '展开冒泡' }).click()
     await expect(page.locator('.petal-position')).toHaveCount(5)
     await page.waitForTimeout(650)
 
@@ -82,7 +82,7 @@ test('petals collapse when the orb window loses focus', async ({ page }) => {
 test('dragging the orb does not trigger a click and it remains clickable afterwards', async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 340 })
   await page.goto('/?window=orb')
-  const orb = page.getByRole('button', { name: '展开花瓣工具箱' })
+  const orb = page.getByRole('button', { name: '展开冒泡' })
   const box = await orb.boundingBox()
   if (!box) throw new Error('orb bounding box missing')
 
@@ -250,10 +250,38 @@ test('developer tools format and copy JSON, and expose six tools', async ({ page
   await expect(page.getByText('JSON 结果已复制')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('"count": 6')
 
-  for (const name of ['URL', 'Base64', '时间戳', 'JWT', 'UUID']) {
+  for (const name of ['URL', 'Base64', '时间戳', '二维码', 'UUID']) {
     await switcher.getByRole('button', { name }).click()
   }
   await expect(page.getByRole('heading', { name: 'UUID 生成' })).toBeVisible()
+})
+
+test('QR code tool generates an image and recognizes an uploaded QR code', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 620 })
+  await page.goto('/?window=panel')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'dev-tools' } }))
+  })
+  await page.getByRole('button', { name: '二维码' }).click()
+  const source = '冒泡 QR 识别 https://example.com'
+  await page.getByRole('textbox', { name: '二维码字符串' }).fill(source)
+  await page.getByRole('button', { name: '转换' }).click()
+  const generated = page.getByRole('img', { name: '生成的二维码' })
+  await expect(generated).toBeVisible()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '保存图片' }).click()
+  await expect(page.getByText('二维码图片已保存')).toBeVisible()
+  await downloadPromise
+  const dataUrl = await generated.getAttribute('src')
+  if (!dataUrl) throw new Error('generated QR data URL missing')
+  await page.getByLabel('上传二维码图片').setInputFiles({
+    name: 'generated-qr.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(dataUrl.split(',')[1] ?? '', 'base64'),
+  })
+  await expect(page.getByRole('textbox', { name: '二维码识别结果' })).toHaveValue(source)
+  await expect(page.getByText('二维码识别成功')).toBeVisible()
+  await page.screenshot({ path: 'test-results/qr-code-tool.png', omitBackground: true })
 })
 
 test('health panel manages reminder projects and common pause policies', async ({ page }) => {
@@ -307,8 +335,8 @@ test('clipboard panel searches, copies, favorites and deletes a text card', asyn
     const oldest = new Date(Date.now() - 120_000).toISOString()
     localStorage.setItem('petal-toolbox.clipboard-items', JSON.stringify([
       {
-        id: 'clipboard-e2e-item', type: 'plain_text', textContent: '花瓣剪贴板测试内容',
-        contentHash: 'text:e2e:12', previewText: '花瓣剪贴板测试内容', createdAt: now,
+        id: 'clipboard-e2e-item', type: 'plain_text', textContent: '冒泡剪贴板测试内容',
+        contentHash: 'text:e2e:12', previewText: '冒泡剪贴板测试内容', createdAt: now,
         updatedAt: now, lastCopiedAt: now, copyCount: 1, isFavorite: false,
         isPinned: false, isSensitive: false,
       },
@@ -345,7 +373,7 @@ test('clipboard panel searches, copies, favorites and deletes a text card', asyn
   await page.screenshot({ path: 'test-results/clipboard-text-stage6.png', omitBackground: true })
   await textCardBodies.first().click()
   await expect(page.getByText('已复制到剪贴板')).toBeVisible()
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('花瓣剪贴板测试内容')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('冒泡剪贴板测试内容')
 
   const cardsBeforeCopy = await page.locator('.clipboard-card pre').allTextContents()
   await textCardBodies.nth(1).click()
@@ -420,7 +448,7 @@ test('files panel converts paths and prepares date folders', async ({ page }) =>
 test('health debug event triggers a reminder before its schedule', async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 340 })
   await page.goto('/?window=orb')
-  await page.getByRole('button', { name: '展开花瓣工具箱' }).waitFor()
+  await page.getByRole('button', { name: '展开冒泡' }).waitFor()
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent('health:debug-trigger', { detail: { reminderId: 'water' } }))
   })

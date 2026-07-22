@@ -30,7 +30,7 @@ const emit = defineEmits<{
         </UiTooltip>
         <span class="category-mark" aria-hidden="true"><slot name="icon" /></span>
         <div>
-          <p class="eyebrow">花瓣工具箱</p>
+          <p class="eyebrow">冒泡</p>
           <h1>{{ title }}</h1>
         </div>
       </div>
