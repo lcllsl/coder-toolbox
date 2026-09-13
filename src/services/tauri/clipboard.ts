@@ -22,6 +22,14 @@ export async function getClipboardSequenceNumber(): Promise<number | null> {
   return invoke<number>('clipboard_sequence_number')
 }
 
+export async function shouldIgnoreSensitiveClipboard(
+  text: string,
+  sequence: number,
+): Promise<boolean> {
+  if (!isTauriRuntime()) return false
+  return invoke<boolean>('clipboard_should_ignore_sensitive', { text, sequence })
+}
+
 export async function publishClipboardSettingsChanged(): Promise<void> {
   if (isTauriRuntime()) await emit(CLIPBOARD_SETTINGS_CHANGED)
   else window.dispatchEvent(new Event(CLIPBOARD_SETTINGS_CHANGED))

@@ -5,9 +5,16 @@ import { useFilesStore } from '@/app/stores/files'
 import { useHealthStore } from '@/app/stores/health'
 import { usePanelStore } from '@/app/stores/panel'
 import { useQuickActionsStore } from '@/app/stores/quick-actions'
-import { clearAllSettings, createDefaultAppSettings, loadAppSettings, saveAppSettings } from '@/features/settings/repositories/app-settings-repository'
+import { useVaultStore } from '@/app/stores/vault'
+import { clearAllSettings, createDefaultAppSettings, loadAppSettings, normalizeVaultAutoLockMinutes, saveAppSettings, shouldConfigureVaultAutoLock } from '@/features/settings/repositories/app-settings-repository'
 import type { AppMode, AppSettings, DoubleClickAction } from '@/features/settings/types'
+import { getAppWindowLabel, isTauriRuntime } from '@/services/tauri/runtime'
 import { getAutostartEnabled, publishAppSettingsChanged, replaceGlobalShortcut, setAutostart, updateTrayMode } from '@/services/tauri/settings'
+
+async function configureVaultAutoLock(minutes: number): Promise<void> {
+  if (!shouldConfigureVaultAutoLock(isTauriRuntime(), getAppWindowLabel())) return
+  await useVaultStore().configureAutoLock(minutes)
+}
 
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
@@ -20,10 +27,12 @@ export const useSettingsStore = defineStore('settings', {
       this.settings = await loadAppSettings()
       try { this.settings.autostart = await getAutostartEnabled() }
       catch { /* Keep the persisted display value when the platform query fails. */ }
+      await configureVaultAutoLock(this.settings.vaultAutoLockMinutes)
       this.initialized = true
     },
     async reload() {
       this.settings = await loadAppSettings()
+      await configureVaultAutoLock(this.settings.vaultAutoLockMinutes)
     },
     async persist(notify = true) {
       await saveAppSettings(this.settings)
@@ -43,6 +52,12 @@ export const useSettingsStore = defineStore('settings', {
     },
     async setDoubleClickAction(action: DoubleClickAction) {
       this.settings.doubleClickAction = action
+      await this.persist()
+    },
+    async setVaultAutoLockMinutes(minutes: number) {
+      const normalized = normalizeVaultAutoLockMinutes(minutes)
+      await configureVaultAutoLock(normalized)
+      this.settings.vaultAutoLockMinutes = normalized
       await this.persist()
     },
     async setAutostart(enabled: boolean) {
@@ -81,6 +96,7 @@ export const useSettingsStore = defineStore('settings', {
       await replaceGlobalShortcut(defaults.globalShortcut, this.settings.globalShortcut)
       await clearAllSettings()
       this.settings = defaults
+      await configureVaultAutoLock(defaults.vaultAutoLockMinutes)
       files.resetFavoriteFolders()
       quick.resetLinks()
       await Promise.all([

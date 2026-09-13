@@ -1,12 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Check, Clock3, HeartPulse } from '@lucide/vue'
 
 import type { ReminderConfig } from '@/features/health/types'
 
-defineProps<{
+const props = defineProps<{
   reminder: ReminderConfig
   pendingCount: number
+  countdownSeconds: number
 }>()
+
+const countdownStyle = computed(() => ({
+  '--reminder-countdown-duration': `${props.countdownSeconds}s`,
+}))
 
 const emit = defineEmits<{
   complete: []
@@ -15,7 +21,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <aside class="reminder-card" role="alert" :aria-label="`${reminder.title}提醒`">
+  <aside class="reminder-card" role="alert" :aria-label="`${reminder.title}提醒`" :style="countdownStyle">
+    <svg class="reminder-countdown-ring" viewBox="0 0 238 126" preserveAspectRatio="none" aria-hidden="true">
+      <rect class="countdown-track" x="1.5" y="1.5" width="235" height="123" rx="17" pathLength="100" />
+      <rect class="countdown-progress" x="1.5" y="1.5" width="235" height="123" rx="17" pathLength="100" />
+    </svg>
+    <span class="sr-only">{{ countdownSeconds }} 秒内无操作将自动完成</span>
     <div class="reminder-card-heading">
       <span class="pulse-icon"><HeartPulse :size="20" /></span>
       <div><span v-if="pendingCount > 1">还有 {{ pendingCount }} 项提醒</span><h2>{{ reminder.title }}</h2></div>
@@ -29,7 +40,12 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.reminder-card { width: 238px; height: 126px; padding: 12px 13px; border: 1px solid color-mix(in srgb, var(--color-health) 22%, var(--color-border)); border-radius: var(--radius-lg); color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: 0 8px 22px -10px rgb(22 93 79 / 36%); backdrop-filter: blur(18px) saturate(1.15); }
+.reminder-card { position: relative; width: 238px; height: 126px; padding: 12px 13px; border: 1px solid color-mix(in srgb, var(--color-health) 22%, var(--color-border)); border-radius: var(--radius-lg); color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: 0 8px 22px -10px rgb(22 93 79 / 36%); backdrop-filter: blur(18px) saturate(1.15); }
+.reminder-countdown-ring { position: absolute; z-index: 2; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; pointer-events: none; }
+.reminder-countdown-ring rect { fill: none; vector-effect: non-scaling-stroke; }
+.countdown-track { stroke: color-mix(in srgb, var(--color-health) 12%, transparent); stroke-width: 1.5; }
+.countdown-progress { stroke: var(--color-health); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; animation: reminder-countdown var(--reminder-countdown-duration) linear forwards; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .reminder-card-heading { display: flex; align-items: center; gap: 9px; }
 .pulse-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--color-health); background: color-mix(in srgb, var(--color-health) 12%, transparent); }
 .reminder-card-heading > div { display: grid; gap: 1px; }
@@ -39,4 +55,6 @@ const emit = defineEmits<{
 .reminder-card-actions { display: flex; gap: 7px; }
 .reminder-card-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); color: var(--color-text-secondary); background: var(--color-surface); font-size: 11.5px; cursor: pointer; }
 .reminder-card-actions .complete { border-color: transparent; color: #fff; background: var(--color-health); }
+@keyframes reminder-countdown { to { stroke-dashoffset: 100; } }
+@media (prefers-reduced-motion: reduce) { .countdown-progress { animation: none; stroke-dashoffset: 50; } }
 </style>

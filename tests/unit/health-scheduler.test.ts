@@ -10,9 +10,15 @@ import {
   isHealthSuppressed,
   isInQuietHours,
 } from '@/features/health/core/scheduler'
+import { REMINDER_AUTO_COMPLETE_MS, REMINDER_AUTO_COMPLETE_SECONDS } from '@/features/health/core/reminder-timing'
 import { createDefaultHealthSettings } from '@/features/health/repositories/health-settings-repository'
 
 describe('health reminder scheduler', () => {
+  it('uses a one-minute automatic completion window', () => {
+    expect(REMINDER_AUTO_COMPLETE_SECONDS).toBe(60)
+    expect(REMINDER_AUTO_COMPLETE_MS).toBe(60_000)
+  })
+
   it('creates the five documented defaults', () => {
     const reminders = createDefaultReminders(new Date('2026-07-21T08:00:00Z'))
     expect(reminders.map(({ id, enabled, intervalMinutes }) => ({ id, enabled, intervalMinutes }))).toEqual([

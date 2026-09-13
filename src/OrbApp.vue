@@ -10,6 +10,7 @@ import OrbButton from '@/components/orb/OrbButton.vue'
 import PetalPlaceholder from '@/components/petals/PetalPlaceholder.vue'
 import ReminderCard from '@/features/health/components/ReminderCard.vue'
 import { computeReminderCardRegion } from '@/features/health/core/reminder-layout'
+import { REMINDER_AUTO_COMPLETE_MS, REMINDER_AUTO_COMPLETE_SECONDS } from '@/features/health/core/reminder-timing'
 import { onHealthDebugTrigger, onHealthSettingsChanged } from '@/services/tauri/health'
 import { onClipboardSettingsChanged } from '@/services/tauri/clipboard'
 import { onAppSettingsChanged, onGlobalShortcut, onTrayModeRequested, updateTrayMode } from '@/services/tauri/settings'
@@ -98,6 +99,7 @@ let moving = false
 let edgeTransition: Promise<void> | null = null
 let healthTimer: number | undefined
 let reminderCardTimer: number | undefined
+let timedReminderId: string | undefined
 let lastHealthTickAt = Date.now()
 let clickTimer: number | undefined
 
@@ -114,6 +116,7 @@ function clearEdgeTimer() {
 function clearReminderCardTimer() {
   if (reminderCardTimer !== undefined) window.clearTimeout(reminderCardTimer)
   reminderCardTimer = undefined
+  timedReminderId = undefined
 }
 
 function clearClickTimer() {
@@ -195,8 +198,12 @@ async function openReminderCard() {
   }
   await nextTick()
   await enableExpandedHitTest()
-  clearReminderCardTimer()
-  reminderCardTimer = window.setTimeout(() => void autoHideReminder(), 30_000)
+  const activeReminderId = healthStore.activeReminder.id
+  if (reminderCardTimer === undefined || timedReminderId !== activeReminderId) {
+    clearReminderCardTimer()
+    timedReminderId = activeReminderId
+    reminderCardTimer = window.setTimeout(() => void completeReminder(), REMINDER_AUTO_COMPLETE_MS)
+  }
 }
 
 async function closeReminderWindow() {
@@ -217,20 +224,17 @@ async function runHealthTick() {
 }
 
 async function completeReminder() {
+  clearReminderCardTimer()
   await healthStore.completeActive()
   if (healthStore.cardVisible) await openReminderCard()
   else await closeReminderWindow()
 }
 
 async function snoozeReminder() {
+  clearReminderCardTimer()
   await healthStore.snoozeActive()
   if (healthStore.cardVisible) await openReminderCard()
   else await closeReminderWindow()
-}
-
-async function autoHideReminder() {
-  await healthStore.autoHideActive()
-  await closeReminderWindow()
 }
 
 async function closePetals() {
@@ -483,8 +487,10 @@ onUnmounted(() => {
         :style="{ left: `${reminderRegion.x}px`, top: `${reminderRegion.y}px` }"
       >
         <ReminderCard
+          :key="healthStore.activeReminder.id"
           :reminder="healthStore.activeReminder"
           :pending-count="healthStore.pendingCount"
+          :countdown-seconds="REMINDER_AUTO_COMPLETE_SECONDS"
           @complete="completeReminder"
           @snooze="snoozeReminder"
         />

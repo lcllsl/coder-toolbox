@@ -1,26 +1,34 @@
-#[cfg(target_os = "macos")]
-fn system_clipboard_sequence() -> u64 {
-    use objc2::{msg_send, rc::Retained, ClassType};
-    use objc2_app_kit::NSPasteboard;
+use std::sync::Arc;
 
-    let pasteboard: Option<Retained<NSPasteboard>> =
-        unsafe { msg_send![NSPasteboard::class(), generalPasteboard] };
-    pasteboard
-        .map(|pasteboard| pasteboard.changeCount().max(0) as u64)
-        .unwrap_or(0)
-}
+use tauri::{State, WebviewWindow};
+use zeroize::Zeroizing;
 
-#[cfg(target_os = "windows")]
-fn system_clipboard_sequence() -> u64 {
-    unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() as u64 }
-}
+use crate::vault::clipboard::{current_sequence_number, SensitiveClipboardState};
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn system_clipboard_sequence() -> u64 {
-    0
-}
+const CLIPBOARD_LISTENER_WINDOW: &str = "orb-window";
 
 #[tauri::command]
 pub fn clipboard_sequence_number() -> u64 {
-    system_clipboard_sequence()
+    current_sequence_number()
+}
+
+/// Lets the orb listener check a process-local marker for a vault copy.
+///
+/// Plaintext is used only to calculate the digest and is zeroized when this
+/// command returns. The state itself never retains clipboard text.
+#[tauri::command]
+pub async fn clipboard_should_ignore_sensitive(
+    window: WebviewWindow,
+    state: State<'_, Arc<SensitiveClipboardState>>,
+    text: String,
+    sequence: u64,
+) -> Result<bool, String> {
+    let text = Zeroizing::new(text);
+    if window.label() != CLIPBOARD_LISTENER_WINDOW {
+        return Err("sensitive_clipboard_marker_forbidden".to_owned());
+    }
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.should_ignore(text.as_str(), sequence))
+        .await
+        .map_err(|_| "sensitive_clipboard_marker_task_failed".to_owned())
 }

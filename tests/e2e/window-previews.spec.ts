@@ -163,6 +163,144 @@ test('quick actions copy values and manage safe web links', async ({ page, conte
   await page.screenshot({ path: 'test-results/quick-actions-stage8.png', omitBackground: true })
 })
 
+test('vault preview covers initialization, CRUD, search, reveal, locking and permanent reset', async ({ page, context }) => {
+  await page.setViewportSize({ width: 560, height: 540 })
+  await page.goto('/?window=panel')
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
+    origin: new URL(page.url()).origin,
+  })
+
+  const quickNavigation = page.getByRole('navigation', { name: '快捷入口工具' })
+  await quickNavigation.getByRole('button', { name: '加密凭据夹' }).click()
+  await expect(page.getByRole('heading', { name: '设置主密码' })).toBeVisible()
+  const setupInputs = page.locator('.setup-gate input')
+  await setupInputs.nth(0).fill('preview-master-password')
+  await setupInputs.nth(1).fill('preview-master-password')
+  await page.getByRole('button', { name: '创建凭据夹' }).click()
+  await expect(page.getByText('还没有凭据', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '新增凭据' }).first().click()
+  const dialog = page.getByRole('dialog', { name: '新增凭据' })
+  await dialog.getByLabel('系统名称 *').fill('OA 管理后台')
+  await dialog.getByLabel('用户名').fill('admin001')
+  await dialog.getByLabel('密码 *').fill('fixed-vault-secret')
+  await dialog.getByLabel('备注').fill('生产环境')
+  await dialog.getByRole('button', { name: '保存凭据' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByText('OA 管理后台', { exact: true })).toBeVisible()
+
+  const search = page.getByRole('searchbox', { name: '搜索凭据' })
+  await search.fill('admin001')
+  await expect(page.locator('.credential-card')).toHaveCount(1)
+  await search.fill('不存在')
+  await expect(page.getByText('没有匹配的凭据')).toBeVisible()
+  await search.fill('')
+  await page.waitForTimeout(3_200)
+  await page.screenshot({ path: 'test-results/vault-preview.png', omitBackground: true })
+
+  await page.getByRole('button', { name: '显示密码' }).click()
+  await expect(page.getByText('fixed-vault-secret', { exact: true })).toBeVisible()
+  await page.waitForTimeout(10_100)
+  await expect(page.getByText('fixed-vault-secret', { exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: '编辑凭据' }).click()
+  const editDialog = page.getByRole('dialog', { name: '编辑凭据' })
+  await editDialog.getByLabel('系统名称 *').fill('OA 生产后台')
+  await editDialog.getByRole('button', { name: '保存凭据' }).click()
+  await expect(editDialog).toHaveCount(0)
+  await expect(page.getByText('OA 生产后台', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '复制密码' }).click()
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('fixed-vault-secret')
+  await page.getByRole('button', { name: '锁定', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '加密凭据夹' })).toBeVisible()
+
+  const unlockInput = page.locator('#vault-master-password')
+  await unlockInput.fill('unfinished-master-password')
+  await page.getByRole('button', { name: '显示主密码' }).click()
+  await page.evaluate(() => window.dispatchEvent(new Event('vault:locked')))
+  await expect(unlockInput).toHaveValue('')
+  await expect(unlockInput).toHaveAttribute('type', 'password')
+  await page.getByRole('button', { name: '忘记主密码？' }).click()
+  await page.getByRole('alertdialog', { name: '忘记主密码？' }).getByRole('button', { name: '继续' }).click()
+  const forgotFinalDialog = page.getByRole('alertdialog', { name: '最后确认删除？' })
+  await expect(forgotFinalDialog).toBeVisible()
+  await expect(forgotFinalDialog.getByRole('button', { name: '取消' })).toBeFocused()
+  await forgotFinalDialog.getByRole('button', { name: '取消' }).click()
+
+  await page.getByRole('button', { name: '忘记主密码？' }).click()
+  await page.getByRole('alertdialog', { name: '忘记主密码？' }).getByRole('button', { name: '继续' }).dblclick()
+  await expect(forgotFinalDialog).toBeVisible()
+  await forgotFinalDialog.getByRole('button', { name: '取消' }).click()
+  await unlockInput.fill('wrong-password')
+  await unlockInput.press('Enter')
+  await expect(page.getByRole('alert')).toHaveText('主密码错误')
+  await unlockInput.fill('preview-master-password')
+  await unlockInput.press('Enter')
+  await expect(page.getByText('OA 生产后台', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '删除凭据' }).click()
+  await page.getByRole('alertdialog', { name: '删除该凭据？' }).getByRole('button', { name: '删除' }).click()
+  await expect(page.getByText('还没有凭据', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '新增凭据' }).first().click()
+  const retainedDialog = page.getByRole('dialog', { name: '新增凭据' })
+  await retainedDialog.getByLabel('系统名称 *').fill('清理保留测试')
+  await retainedDialog.getByLabel('用户名').fill('retained-user')
+  await retainedDialog.getByLabel('密码 *').fill('retained-secret')
+  await retainedDialog.getByRole('button', { name: '保存凭据' }).click()
+  await expect(page.getByText('清理保留测试', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '打开设置' }).click()
+  await page.getByRole('navigation', { name: '设置分类' }).getByRole('button', { name: '数据与应用' }).click()
+  const includeVault = page.getByRole('checkbox', { name: /加密凭据夹/ })
+  await expect(includeVault).not.toBeChecked()
+  await page.getByRole('button', { name: /清除数据并保留设置/ }).click()
+  await page.getByRole('alertdialog', { name: '清除全部本地数据？' }).getByRole('button', { name: '确认清除' }).click()
+  await expect(page.getByText('本地数据已清除，设置已保留')).toBeVisible()
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
+  })
+  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await expect(page.getByText('清理保留测试', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '打开设置' }).click()
+  await page.getByRole('navigation', { name: '设置分类' }).getByRole('button', { name: '数据与应用' }).click()
+  await expect(page.getByRole('checkbox', { name: /加密凭据夹/ })).not.toBeChecked()
+  await page.getByRole('button', { name: /清除数据并重置设置/ }).click()
+  await page.getByRole('alertdialog', { name: '清除全部本地数据？' }).getByRole('button', { name: '确认清除' }).click()
+  await expect(page.getByText('本地数据已清除，设置已重置')).toBeVisible()
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
+  })
+  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await expect(page.getByText('清理保留测试', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: '打开设置' }).click()
+  await page.getByRole('navigation', { name: '设置分类' }).getByRole('button', { name: '数据与应用' }).click()
+  await page.getByRole('checkbox', { name: /加密凭据夹/ }).check()
+  await page.getByRole('button', { name: /清除数据并保留设置/ }).click()
+  await page.getByRole('alertdialog', { name: '清除全部本地数据？' }).getByRole('button', { name: '确认清除' }).click()
+  const permanentDialog = page.getByRole('alertdialog', { name: '永久删除加密凭据夹？' })
+  await expect(permanentDialog).toBeVisible()
+  await expect(permanentDialog.getByRole('button', { name: '取消' })).toBeFocused()
+  await permanentDialog.getByRole('button', { name: '取消' }).click()
+
+  await page.getByRole('button', { name: /清除数据并保留设置/ }).click()
+  await page.getByRole('alertdialog', { name: '清除全部本地数据？' }).getByRole('button', { name: '确认清除' }).dblclick()
+  await expect(permanentDialog).toBeVisible()
+  await permanentDialog.getByRole('button', { name: '永久删除' }).click()
+  await expect(page.getByText(/加密凭据夹已永久删除/)).toBeVisible()
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
+  })
+  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await expect(page.getByRole('heading', { name: '设置主密码' })).toBeVisible()
+})
+
 test('panel routes all five categories and supports common actions', async ({ page }) => {
   await page.goto('/?window=panel')
 
@@ -296,6 +434,7 @@ test('health panel manages reminder projects and common pause policies', async (
   await expect(page.getByRole('checkbox', { name: '提肛训练提醒' })).not.toBeChecked()
   await expect(page.locator('.reminder-field').first()).toBeVisible()
   await expect(page.getByRole('button', { name: /立即调试.+提醒/ })).toHaveCount(5)
+  await page.screenshot({ path: 'test-results/health-overview.png', omitBackground: true })
   await page.getByRole('button', { name: '新增提醒' }).click()
   await page.getByLabel('项目标题').fill('伸展肩颈')
   await page.getByLabel('项目介绍').fill('活动肩膀和颈部，放松一下。')
@@ -455,6 +594,26 @@ test('health debug event triggers a reminder before its schedule', async ({ page
 
   await expect(page.getByRole('alert', { name: '喝水提醒' })).toBeVisible()
   await expect(page.getByText('补充一些水分，给专注力充充电。')).toBeVisible()
+})
+
+test('health reminder countdown auto-completes after one minute', async ({ page }) => {
+  await page.clock.install()
+  await page.setViewportSize({ width: 340, height: 340 })
+  await page.goto('/?window=orb')
+  await page.getByRole('button', { name: '展开冒泡' }).waitFor()
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('health:debug-trigger', { detail: { reminderId: 'water' } }))
+  })
+
+  await expect(page.getByRole('alert', { name: '喝水提醒' })).toBeVisible()
+  await expect(page.locator('.countdown-progress')).toHaveCSS('animation-duration', '60s')
+  await page.getByRole('alert', { name: '喝水提醒' }).screenshot({ path: 'test-results/health-reminder-countdown.png' })
+  await page.clock.fastForward(60_000)
+  await expect(page.getByRole('alert', { name: '喝水提醒' })).toHaveCount(0)
+  await expect.poll(async () => page.evaluate(() => {
+    const logs = JSON.parse(localStorage.getItem('petal-toolbox.reminder-logs') ?? '[]') as { action: string }[]
+    return logs.at(-1)?.action
+  })).toBe('completed')
 })
 
 test('a due health reminder opens one card and completion updates statistics', async ({ page }) => {

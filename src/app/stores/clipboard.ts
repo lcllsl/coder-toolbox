@@ -28,6 +28,7 @@ import {
   publishClipboardHistoryChanged,
   publishClipboardSettingsChanged,
   saveClipboardImage,
+  shouldIgnoreSensitiveClipboard,
   writeCachedClipboardImage,
   writeClipboardText,
 } from '@/services/tauri/clipboard'
@@ -71,8 +72,8 @@ export const useClipboardStore = defineStore('clipboard', {
     },
     startPolling() {
       if (pollTimer !== undefined) return
-      pollTimer = window.setInterval(() => void this.poll(), POLL_INTERVAL)
-      void this.poll()
+      pollTimer = window.setInterval(() => { void this.poll().catch(() => undefined) }, POLL_INTERVAL)
+      void this.poll().catch(() => undefined)
     },
     stopPolling() {
       if (pollTimer !== undefined) window.clearInterval(pollTimer)
@@ -82,16 +83,37 @@ export const useClipboardStore = defineStore('clipboard', {
       if (polling || this.settings.paused) return
       polling = true
       try {
-        const sequence = await getClipboardSequenceNumber()
-        if (sequence !== null && sequence === lastObservedSequence) return
-        lastObservedSequence = sequence
+        const sequenceBeforeRead = await getClipboardSequenceNumber()
+        if (sequenceBeforeRead !== null && sequenceBeforeRead === lastObservedSequence) return
         const text = await readClipboardText()
+        const sequenceAfterTextRead = await getClipboardSequenceNumber()
+        if (
+          sequenceBeforeRead !== null
+          && sequenceAfterTextRead !== null
+          && sequenceBeforeRead !== sequenceAfterTextRead
+        ) return
         if (text) {
+          const stableSequence = sequenceAfterTextRead ?? sequenceBeforeRead
+          if (
+            stableSequence !== null
+            && await shouldIgnoreSensitiveClipboard(text, stableSequence)
+          ) {
+            lastObservedSequence = stableSequence
+            return
+          }
           await this.ingestText(text)
+          lastObservedSequence = stableSequence
           return
         }
         const image = await readClipboardImage()
+        const sequenceAfterImageRead = await getClipboardSequenceNumber()
+        if (
+          sequenceAfterTextRead !== null
+          && sequenceAfterImageRead !== null
+          && sequenceAfterTextRead !== sequenceAfterImageRead
+        ) return
         if (image) await this.ingestImage(image)
+        lastObservedSequence = sequenceAfterImageRead ?? sequenceAfterTextRead ?? sequenceBeforeRead
       } finally {
         polling = false
       }
@@ -99,13 +121,14 @@ export const useClipboardStore = defineStore('clipboard', {
     async ingestText(text: string, now = new Date()) {
       const contentHash = hashClipboardText(text)
       if (contentHash === lastObservedHash) return
-      lastObservedHash = contentHash
       if (ignoredWrite && ignoredWrite.until >= now.getTime() && ignoredWrite.text === text) {
         ignoredWrite = undefined
+        lastObservedHash = contentHash
         return
       }
       if (this.settings.skipSensitive && detectSensitiveText(text)) {
         this.lastSkippedAt = now.toISOString()
+        lastObservedHash = contentHash
         return
       }
       const latest = await getLatestClipboardItem()
@@ -134,13 +157,14 @@ export const useClipboardStore = defineStore('clipboard', {
       await Promise.all(prunedImagePaths.map((path) => deleteClipboardImage(path)))
       await this.reload()
       await publishClipboardHistoryChanged()
+      lastObservedHash = contentHash
     },
     async ingestImage(image: { rgba: Uint8Array; width: number; height: number }, now = new Date()) {
       const contentHash = hashClipboardImage(image.rgba, image.width, image.height)
       if (contentHash === lastObservedHash) return
-      lastObservedHash = contentHash
       if (ignoredImageHash && ignoredImageHash.until >= now.getTime() && ignoredImageHash.hash === contentHash) {
         ignoredImageHash = undefined
+        lastObservedHash = contentHash
         return
       }
       const latest = await getLatestClipboardItem()
@@ -151,26 +175,32 @@ export const useClipboardStore = defineStore('clipboard', {
         const imagePath = await saveClipboardImage(id, image)
         const expires = new Date(now)
         expires.setDate(expires.getDate() + this.settings.imageRetentionDays)
-        await insertClipboardItem({
-          id,
-          type: 'image',
-          imagePath,
-          contentHash,
-          previewText: `${image.width} × ${image.height}`,
-          createdAt: now.toISOString(),
-          updatedAt: now.toISOString(),
-          lastCopiedAt: now.toISOString(),
-          copyCount: 1,
-          isFavorite: false,
-          isPinned: false,
-          isSensitive: false,
-          expiresAt: expires.toISOString(),
-        })
+        try {
+          await insertClipboardItem({
+            id,
+            type: 'image',
+            imagePath,
+            contentHash,
+            previewText: `${image.width} × ${image.height}`,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            lastCopiedAt: now.toISOString(),
+            copyCount: 1,
+            isFavorite: false,
+            isPinned: false,
+            isSensitive: false,
+            expiresAt: expires.toISOString(),
+          })
+        } catch (error) {
+          await deleteClipboardImage(imagePath).catch(() => undefined)
+          throw error
+        }
       }
       const prunedImagePaths = await pruneClipboardItems(this.settings.maxTextItems, this.settings.maxImageItems)
       await Promise.all(prunedImagePaths.map((path) => deleteClipboardImage(path)))
       await this.reload()
       await publishClipboardHistoryChanged()
+      lastObservedHash = contentHash
     },
     async reload() {
       this.items = await listClipboardItems(this.query)

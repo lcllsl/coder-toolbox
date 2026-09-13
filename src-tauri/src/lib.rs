@@ -1,12 +1,18 @@
 mod commands;
 mod tray;
+mod vault;
 
-use tauri::Manager;
+use std::{sync::Arc, time::Duration};
+use tauri::{Emitter, Manager};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Arc::new(vault::state::VaultState::default()))
+        .manage(Arc::new(
+            vault::clipboard::SensitiveClipboardState::default(),
+        ))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -46,12 +52,27 @@ pub fn run() {
                             sql: include_str!("../migrations/0004_recent_features.sql"),
                             kind: MigrationKind::Up,
                         },
+                        Migration {
+                            version: 5,
+                            description: "create_encrypted_vault",
+                            sql: include_str!("../migrations/0005_vault.sql"),
+                            kind: MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
         )
         .setup(|app| {
             tray::create(app)?;
+            let vault_state = app.state::<Arc<vault::state::VaultState>>().inner().clone();
+            let vault_events = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(5));
+                vault_state.lock_if_expired();
+                if vault_state.take_pending_lock_event() {
+                    let _ = vault_events.emit_to("panel-window", "vault:locked", ());
+                }
+            });
             if let Err(code) = commands::settings::register_saved_shortcut(app.handle()) {
                 eprintln!("unable to register global shortcut: {code}");
             }
@@ -74,6 +95,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::clipboard::clipboard_sequence_number,
+            commands::clipboard::clipboard_should_ignore_sensitive,
             commands::files::system_directories,
             commands::files::directory_status,
             commands::files::open_directory,
@@ -87,6 +109,19 @@ pub fn run() {
             commands::settings::replace_global_shortcut,
             commands::settings::set_tray_mode,
             commands::settings::exit_application,
+            commands::vault::vault_status,
+            commands::vault::vault_initialize,
+            commands::vault::vault_unlock,
+            commands::vault::vault_list_items,
+            commands::vault::vault_create_item,
+            commands::vault::vault_update_item,
+            commands::vault::vault_delete_item,
+            commands::vault::vault_copy_item_field,
+            commands::vault::vault_copy_text,
+            commands::vault::vault_lock,
+            commands::vault::vault_touch,
+            commands::vault::vault_configure_auto_lock,
+            commands::vault::vault_reset,
             commands::windows::open_panel,
             commands::windows::close_panel,
             commands::windows::trigger_health_debug_reminder,

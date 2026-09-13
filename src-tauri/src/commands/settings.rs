@@ -1,9 +1,10 @@
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_store::StoreExt;
 
-use crate::tray;
+use crate::{tray, vault::state::VaultState};
 
 const DEFAULT_SHORTCUT: &str = "Ctrl+Alt+Space";
 const GLOBAL_SHORTCUT_EVENT: &str = "orb:global-shortcut";
@@ -89,5 +90,6 @@ pub fn set_tray_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> 
 
 #[tauri::command]
 pub fn exit_application(app: tauri::AppHandle) {
+    app.state::<Arc<VaultState>>().lock();
     app.exit(0);
 }

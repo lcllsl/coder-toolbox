@@ -1,10 +1,25 @@
 import { load } from '@tauri-apps/plugin-store'
 
 import { isTauriRuntime } from '@/services/tauri/runtime'
-import type { AppSettings } from '../types'
+import type { AppSettings, VaultAutoLockMinutes } from '../types'
 
 const STORE_KEY = 'appSettings'
 const BROWSER_KEY = 'petal-toolbox.app-settings'
+const DEFAULT_VAULT_AUTO_LOCK_MINUTES: VaultAutoLockMinutes = 5
+const VAULT_AUTO_LOCK_OPTIONS = new Set<VaultAutoLockMinutes>([1, 5, 15, 30])
+
+export function shouldConfigureVaultAutoLock(
+  nativeRuntime: boolean,
+  windowLabel: 'orb-window' | 'panel-window',
+): boolean {
+  return !nativeRuntime || windowLabel === 'panel-window'
+}
+
+export function normalizeVaultAutoLockMinutes(value: unknown): VaultAutoLockMinutes {
+  return typeof value === 'number' && VAULT_AUTO_LOCK_OPTIONS.has(value as VaultAutoLockMinutes)
+    ? value as VaultAutoLockMinutes
+    : DEFAULT_VAULT_AUTO_LOCK_MINUTES
+}
 
 export function createDefaultAppSettings(): AppSettings {
   return {
@@ -14,6 +29,7 @@ export function createDefaultAppSettings(): AppSettings {
     autostart: false,
     orbSize: 56,
     orbOpacity: 1,
+    vaultAutoLockMinutes: DEFAULT_VAULT_AUTO_LOCK_MINUTES,
   }
 }
 
@@ -29,6 +45,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
       ...saved,
       orbSize: Math.min(68, Math.max(48, saved.orbSize ?? defaults.orbSize)),
       orbOpacity: Math.min(1, Math.max(.6, saved.orbOpacity ?? defaults.orbOpacity)),
+      vaultAutoLockMinutes: normalizeVaultAutoLockMinutes(saved.vaultAutoLockMinutes),
     }
   } catch {
     return defaults
@@ -48,7 +65,9 @@ export async function saveAppSettings(settings: AppSettings): Promise<void> {
 export async function clearAllSettings(): Promise<void> {
   if (!isTauriRuntime()) {
     for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('petal-toolbox.')) localStorage.removeItem(key)
+      if (key.startsWith('petal-toolbox.') && !key.startsWith('petal-toolbox.vault')) {
+        localStorage.removeItem(key)
+      }
     }
     return
   }

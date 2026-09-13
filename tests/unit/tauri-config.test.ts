@@ -8,6 +8,11 @@ interface TauriConfig {
       csp: string
     }
   }
+  bundle: {
+    macOS?: {
+      signingIdentity?: string
+    }
+  }
 }
 
 describe('Tauri security configuration', () => {
@@ -15,5 +20,11 @@ describe('Tauri security configuration', () => {
     const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')) as TauriConfig
 
     expect(config.app.security.csp).toMatch(/img-src[^;]*\bblob:/)
+  })
+
+  it('ad-hoc signs local macOS application bundles', () => {
+    const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8')) as TauriConfig
+
+    expect(config.bundle.macOS?.signingIdentity).toBe('-')
   })
 })

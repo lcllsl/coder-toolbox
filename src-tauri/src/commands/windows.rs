@@ -1,9 +1,11 @@
-use std::{thread, time::Duration};
+use std::{sync::Arc, thread, time::Duration};
 
 use serde::Serialize;
 use serde_json::json;
 use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 use tauri_plugin_store::StoreExt;
+
+use crate::vault::state::VaultState;
 
 const ORB_WINDOW: &str = "orb-window";
 const PANEL_WINDOW: &str = "panel-window";
@@ -89,6 +91,11 @@ fn emit_panel_navigation(panel: &WebviewWindow, category: &str) -> Result<(), St
     panel
         .emit(PANEL_NAVIGATE_EVENT, PanelNavigationPayload { category })
         .map_err(|_| "panel_navigation_failed".to_owned())
+}
+
+fn lock_vault_before_panel_hide(app: &tauri::AppHandle) {
+    app.state::<Arc<VaultState>>().lock();
+    let _ = app.emit_to(PANEL_WINDOW, "vault:locked", ());
 }
 
 fn valid_reminder_id(reminder_id: &str) -> bool {
@@ -202,6 +209,7 @@ pub fn show_settings(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn close_panel(app: tauri::AppHandle, reopen_petals: bool) -> Result<(), String> {
+    lock_vault_before_panel_hide(&app);
     let panel = app
         .get_webview_window(PANEL_WINDOW)
         .ok_or_else(|| "panel_window_missing".to_owned())?;
@@ -227,6 +235,7 @@ pub fn trigger_health_debug_reminder(
     if !valid_reminder_id(&reminder_id) {
         return Err("unknown_reminder_id".to_owned());
     }
+    lock_vault_before_panel_hide(&app);
     let panel = app
         .get_webview_window(PANEL_WINDOW)
         .ok_or_else(|| "panel_window_missing".to_owned())?;
@@ -550,7 +559,7 @@ mod tests {
 
     #[test]
     fn expanded_window_leaves_room_for_the_orb_and_petals() {
-        assert!(EXPANDED_ORB_SIZE > COLLAPSED_ORB_SIZE * 3.0);
+        const { assert!(EXPANDED_ORB_SIZE > COLLAPSED_ORB_SIZE * 3.0) }
     }
 
     #[test]

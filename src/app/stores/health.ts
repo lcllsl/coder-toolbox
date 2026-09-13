@@ -149,12 +149,6 @@ export const useHealthStore = defineStore('health', {
       this.cardVisible = this.pendingIds.length > 0
       await this.persist(false)
     },
-    async autoHideActive(now = new Date()) {
-      const id = this.pendingIds[0]
-      if (!id || !this.cardVisible) return
-      await addReminderLog(id, 'auto_hidden', now)
-      this.cardVisible = false
-    },
     showPendingCard() {
       if (this.pendingIds.length) this.cardVisible = true
     },

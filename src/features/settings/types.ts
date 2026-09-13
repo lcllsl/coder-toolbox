@@ -1,5 +1,6 @@
 export type AppMode = 'work' | 'silent' | 'paused'
 export type DoubleClickAction = 'none' | 'quick-actions' | 'clipboard' | 'dev-tools'
+export type VaultAutoLockMinutes = 1 | 5 | 15 | 30
 
 export interface AppSettings {
   mode: AppMode
@@ -8,4 +9,5 @@ export interface AppSettings {
   autostart: boolean
   orbSize: number
   orbOpacity: number
+  vaultAutoLockMinutes: VaultAutoLockMinutes
 }

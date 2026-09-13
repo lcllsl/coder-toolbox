@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
 
-use crate::commands::windows;
+use crate::{commands::windows, vault::state::VaultState};
 
 const MODE_EVENT: &str = "app:mode-requested";
 
@@ -86,7 +88,10 @@ pub fn create(app: &tauri::App) -> tauri::Result<()> {
                 let _ = app.emit_to("orb-window", MODE_EVENT, ModePayload { mode });
                 let _ = app.emit_to("panel-window", MODE_EVENT, ModePayload { mode });
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                app.state::<Arc<VaultState>>().lock();
+                app.exit(0);
+            }
             _ => {}
         });
 
