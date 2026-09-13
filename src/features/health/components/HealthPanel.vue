@@ -23,6 +23,7 @@ const nextReminder = computed(() =>
     .sort((a, b) => new Date(a.nextTriggerAt!).getTime() - new Date(b.nextTriggerAt!).getTime())[0],
 )
 const deleteTitle = computed(() => health.settings.reminders.find((reminder) => reminder.id === deleteId.value)?.title ?? '该提醒')
+const enabledCount = computed(() => health.settings.reminders.filter((reminder) => reminder.enabled).length)
 
 function reminderIcon(id: ReminderId) {
   return icons[id] ?? Bell
@@ -72,6 +73,7 @@ onMounted(() => { if (!health.initialized) void health.initialize() })
 <template>
   <section class="health-panel">
     <div class="health-summary">
+      <div><span>今日状态</span><strong class="status-title">{{ health.settings.silentMode ? '静默中' : '进行中' }}</strong><small>{{ enabledCount }} 项提醒已启用</small></div>
       <div><span>今日完成</span><strong>{{ health.totalCompletedToday }}</strong><small>次健康行动</small></div>
       <div><span>下一项</span><strong class="next-title">{{ nextReminder?.title ?? '暂无提醒' }}</strong><small>{{ nextReminder?.nextTriggerAt ? new Date(nextReminder.nextTriggerAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '启用提醒后开始计时' }}</small></div>
       <div class="summary-actions">
@@ -118,12 +120,13 @@ onMounted(() => { if (!health.initialized) void health.initialize() })
 
 <style scoped>
 .health-panel { display: grid; gap: 12px; color: var(--color-text); }
-.health-summary { display: grid; grid-template-columns: 76px minmax(92px, 1fr) auto; gap: 8px; padding: 14px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-health) 9%, var(--color-surface-soft)); }
+.health-summary { display: grid; grid-template-columns: minmax(90px, .8fr) 76px minmax(120px, 1.1fr); gap: 10px; padding: 14px; border: 1px solid color-mix(in srgb, var(--color-health) 16%, var(--color-border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-health) 9%, var(--color-surface-soft)); }
 .health-summary > div:not(.summary-actions) { display: grid; align-content: center; gap: 2px; }
 .health-summary span, .health-summary small { color: var(--color-text-muted); font-size: 12.5px; }
 .health-summary strong { color: var(--color-health); font-size: 25px; }
 .health-summary .next-title { color: var(--color-text); font-size: 15px; }
-.summary-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-content: center; gap: 6px; }
+.health-summary .status-title { color: var(--color-text); font-size: 17px; }
+.summary-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: flex-start; align-content: center; gap: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, var(--color-health) 14%, var(--color-border-subtle)); }
 .summary-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); color: var(--color-text-secondary); background: var(--color-surface); font-size: 12px; cursor: pointer; }
 .reminder-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .reminder-heading > div { display: grid; gap: 2px; }

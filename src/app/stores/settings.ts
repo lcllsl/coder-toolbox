@@ -7,7 +7,7 @@ import { usePanelStore } from '@/app/stores/panel'
 import { useQuickActionsStore } from '@/app/stores/quick-actions'
 import { useVaultStore } from '@/app/stores/vault'
 import { clearAllSettings, createDefaultAppSettings, loadAppSettings, normalizeVaultAutoLockMinutes, saveAppSettings, shouldConfigureVaultAutoLock } from '@/features/settings/repositories/app-settings-repository'
-import type { AppMode, AppSettings, DoubleClickAction } from '@/features/settings/types'
+import type { AiModel, AppMode, AppSettings, DoubleClickAction } from '@/features/settings/types'
 import { getAppWindowLabel, isTauriRuntime } from '@/services/tauri/runtime'
 import { getAutostartEnabled, publishAppSettingsChanged, replaceGlobalShortcut, setAutostart, updateTrayMode } from '@/services/tauri/settings'
 
@@ -58,6 +58,14 @@ export const useSettingsStore = defineStore('settings', {
       const normalized = normalizeVaultAutoLockMinutes(minutes)
       await configureVaultAutoLock(normalized)
       this.settings.vaultAutoLockMinutes = normalized
+      await this.persist()
+    },
+    async setAiModel(model: AiModel) {
+      this.settings.aiModel = model
+      await this.persist()
+    },
+    async dismissAiPrivacyNotice() {
+      this.settings.aiPrivacyNoticeDismissed = true
       await this.persist()
     },
     async setAutostart(enabled: boolean) {

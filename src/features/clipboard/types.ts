@@ -10,6 +10,7 @@ export const CLIPBOARD_TYPES = [
 ] as const
 
 export type ClipboardContentType = (typeof CLIPBOARD_TYPES)[number]
+export type ClipboardFilterType = ClipboardContentType | 'all' | 'other'
 
 export interface ClipboardItem {
   id: string
@@ -39,6 +40,6 @@ export interface ClipboardSettings {
 
 export interface ClipboardQuery {
   search?: string
-  type?: ClipboardContentType | 'all'
+  type?: ClipboardFilterType
   favoritesOnly?: boolean
 }

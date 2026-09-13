@@ -6,6 +6,9 @@ test('orb preview exposes exactly five categories', async ({ page }) => {
   await page.getByRole('button', { name: '展开冒泡' }).click()
   await expect(page.locator('.petal')).toHaveCount(5)
   await expect(page.locator('.petal-position')).toHaveCount(5)
+  for (const label of ['AI 办公', '剪贴板', '文件中心', '效率工具', '健康助手']) {
+    await expect(page.getByRole('button', { name: label })).toBeVisible()
+  }
   await page.waitForTimeout(650)
   await page.screenshot({ path: 'test-results/orb-stage2.png', omitBackground: true })
 })
@@ -117,8 +120,35 @@ test('orb applies paused mode and distinguishes a configured double click', asyn
 test('panel preview mounts its lightweight shell', async ({ page }) => {
   await page.setViewportSize({ width: 560, height: 540 })
   await page.goto('/?window=panel')
-  await expect(page.getByRole('heading', { name: '快捷入口', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '效率工具', exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/panel-stage3.png', omitBackground: true })
+})
+
+test('AI office turns a local spreadsheet into an interactive report', async ({ page }) => {
+  await page.setViewportSize({ width: 1040, height: 760 })
+  await page.goto('/?window=panel')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'ai-office' } }))
+  })
+  await expect(page.getByRole('heading', { name: 'AI 办公', exact: true })).toBeVisible()
+  await expect(page.getByText('Excel 智能图表', { exact: true })).toBeVisible()
+  await expect(page.getByText('已上线', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /Excel 智能图表/ }).click()
+  await page.locator('input[type=file]').setInputFiles({
+    name: '演示销售数据.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('月份,区域,部门,销售额,成本,利润,利润率\n2026-01,华东,销售,120000,80000,40000,33%\n2026-02,华东,销售,150000,92000,58000,39%\n2026-03,华南,渠道,98000,65000,33000,34%\n2026-04,华南,渠道,132000,87000,45000,34%\n2026-05,华北,直营,166000,101000,65000,39%\n2026-06,华北,直营,180000,108000,72000,40%'),
+  })
+  await expect(page.getByRole('heading', { name: '字段识别' })).toBeVisible()
+  await expect(page.getByText('已识别 7 个字段')).toBeVisible()
+  await page.getByRole('button', { name: '使用本地方案生成' }).click()
+  await expect(page.getByText('尚未配置 AI 服务，已使用本地图表推荐。')).toBeVisible()
+  await expect.poll(() => page.locator('.chart-card').count()).toBeGreaterThanOrEqual(3)
+  await expect.poll(() => page.locator('canvas').count()).toBeGreaterThanOrEqual(3)
+  await expect.poll(() => page.locator('.panel-view').evaluate((element) => getComputedStyle(element).opacity)).toBe('1')
+  await page.waitForTimeout(600)
+  await expect(page.getByLabel('报告标题')).toBeVisible()
+  await page.screenshot({ path: 'test-results/ai-office-preview.png' })
 })
 
 test('quick actions copy values and manage safe web links', async ({ page, context }) => {
@@ -128,7 +158,7 @@ test('quick actions copy values and manage safe web links', async ({ page, conte
     origin: new URL(page.url()).origin,
   })
 
-  const navigation = page.getByRole('navigation', { name: '快捷入口工具' })
+  const navigation = page.getByRole('navigation', { name: '效率工具' })
   await navigation.getByRole('button', { name: '快捷复制' }).click()
   await page.getByRole('button', { name: /当前日期/ }).click()
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\d{4}-\d{2}-\d{2}$/)
@@ -158,7 +188,7 @@ test('quick actions copy values and manage safe web links', async ({ page, conte
   await expect(page.getByText('项目文档', { exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/quick-links-stage8.png', omitBackground: true })
 
-  await navigation.getByRole('button', { name: '最近与收藏' }).click()
+  await navigation.getByRole('button', { name: '常用', exact: true }).click()
   await expect(page.getByText('当前日期', { exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/quick-actions-stage8.png', omitBackground: true })
 })
@@ -170,7 +200,7 @@ test('vault preview covers initialization, CRUD, search, reveal, locking and per
     origin: new URL(page.url()).origin,
   })
 
-  const quickNavigation = page.getByRole('navigation', { name: '快捷入口工具' })
+  const quickNavigation = page.getByRole('navigation', { name: '效率工具' })
   await quickNavigation.getByRole('button', { name: '加密凭据夹' }).click()
   await expect(page.getByRole('heading', { name: '设置主密码' })).toBeVisible()
   const setupInputs = page.locator('.setup-gate input')
@@ -262,7 +292,7 @@ test('vault preview covers initialization, CRUD, search, reveal, locking and per
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
   })
-  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await page.getByRole('navigation', { name: '效率工具' }).getByRole('button', { name: '加密凭据夹' }).click()
   await expect(page.getByText('清理保留测试', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: '打开设置' }).click()
@@ -275,7 +305,7 @@ test('vault preview covers initialization, CRUD, search, reveal, locking and per
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
   })
-  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await page.getByRole('navigation', { name: '效率工具' }).getByRole('button', { name: '加密凭据夹' }).click()
   await expect(page.getByText('清理保留测试', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: '打开设置' }).click()
@@ -297,7 +327,7 @@ test('vault preview covers initialization, CRUD, search, reveal, locking and per
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'quick-actions' } }))
   })
-  await page.getByRole('navigation', { name: '快捷入口工具' }).getByRole('button', { name: '加密凭据夹' }).click()
+  await page.getByRole('navigation', { name: '效率工具' }).getByRole('button', { name: '加密凭据夹' }).click()
   await expect(page.getByRole('heading', { name: '设置主密码' })).toBeVisible()
 })
 
@@ -305,11 +335,11 @@ test('panel routes all five categories and supports common actions', async ({ pa
   await page.goto('/?window=panel')
 
   const categories = [
-    ['health', '健康提醒'],
+    ['ai-office', 'AI 办公'],
     ['clipboard', '剪贴板'],
-    ['dev-tools', '开发转换'],
-    ['files', '文件与路径'],
-    ['quick-actions', '快捷入口'],
+    ['files', '文件中心'],
+    ['quick-actions', '效率工具'],
+    ['health', '健康助手'],
   ] as const
 
   for (const [category, label] of categories) {
@@ -343,6 +373,12 @@ test('settings configure modes, shortcuts, double click and local data cleanup',
 
   const settingsNavigation = page.getByRole('navigation', { name: '设置分类' })
   await expect(page.getByRole('slider', { name: '悬浮球尺寸' })).toBeVisible()
+  await settingsNavigation.getByRole('button', { name: 'AI 服务' }).click()
+  await expect(page.getByRole('heading', { name: 'DeepSeek 服务' })).toBeVisible()
+  await expect(page.locator('.ai-service-settings input[type="password"]')).toBeVisible()
+  await expect(page.getByLabel('模型')).toHaveValue('deepseek-v4-flash')
+  await expect(page.getByRole('button', { name: '测试连接' })).toBeDisabled()
+  await expect(page.getByText(/Excel 文件本身不会上传/)).toBeVisible()
   await settingsNavigation.getByRole('button', { name: '行为' }).click()
   await page.getByRole('button', { name: /静默模式/ }).click()
   await expect(page.getByRole('button', { name: /静默模式/ })).toHaveAttribute('aria-pressed', 'true')
@@ -374,6 +410,7 @@ test('developer tools format and copy JSON, and expose six tools', async ({ page
     window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'dev-tools' } }))
   })
 
+  await expect(page.locator('.panel-stage')).toHaveAttribute('data-view', 'quick-actions')
   const switcher = page.getByRole('navigation', { name: '开发转换工具' })
   await expect(switcher.getByRole('button')).toHaveCount(6)
   await page.getByRole('textbox', { name: 'JSON 输入' }).fill('{"name":"花瓣","count":6}')
@@ -403,7 +440,7 @@ test('QR code tool generates an image and recognizes an uploaded QR code', async
   await page.getByRole('button', { name: '二维码' }).click()
   const source = '冒泡 QR 识别 https://example.com'
   await page.getByRole('textbox', { name: '二维码字符串' }).fill(source)
-  await page.getByRole('button', { name: '转换' }).click()
+  await page.getByRole('button', { name: '转换', exact: true }).click()
   const generated = page.getByRole('img', { name: '生成的二维码' })
   await expect(generated).toBeVisible()
   const downloadPromise = page.waitForEvent('download')
@@ -564,8 +601,8 @@ test('files panel converts paths and prepares date folders', async ({ page }) =>
   await expect(page.getByRole('button', { name: /下载/ })).toBeVisible()
   await expect(page.getByRole('textbox', { name: '文件夹名称' })).toHaveValue('项目资料')
 
-  const filesNavigation = page.getByRole('navigation', { name: '文件与路径工具' })
-  await filesNavigation.getByRole('button', { name: '路径转换' }).click()
+  const filesNavigation = page.getByRole('navigation', { name: '文件中心工具' })
+  await filesNavigation.getByRole('button', { name: '路径工具' }).click()
   await page.getByRole('textbox', { name: '原始路径' }).fill('C:\\Users\\demo\\file.txt')
   await page.getByRole('checkbox', { name: /转换为 WSL/ }).check()
   await page.getByRole('button', { name: '转换路径' }).click()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { validateGlobalShortcut } from '@/features/settings/core/shortcuts'
-import { normalizeVaultAutoLockMinutes, shouldConfigureVaultAutoLock } from '@/features/settings/repositories/app-settings-repository'
+import { normalizeAiModel, normalizeVaultAutoLockMinutes, shouldConfigureVaultAutoLock } from '@/features/settings/repositories/app-settings-repository'
 
 describe('settings shortcuts', () => {
   it('normalizes valid global shortcuts', () => {
@@ -28,5 +28,11 @@ describe('settings shortcuts', () => {
     expect(shouldConfigureVaultAutoLock(true, 'orb-window')).toBe(false)
     expect(shouldConfigureVaultAutoLock(true, 'panel-window')).toBe(true)
     expect(shouldConfigureVaultAutoLock(false, 'orb-window')).toBe(true)
+  })
+
+  it('accepts only supported DeepSeek models', () => {
+    expect(normalizeAiModel('deepseek-v4-flash')).toBe('deepseek-v4-flash')
+    expect(normalizeAiModel('deepseek-v4-pro')).toBe('deepseek-v4-pro')
+    expect(normalizeAiModel('unknown')).toBe('deepseek-v4-flash')
   })
 })

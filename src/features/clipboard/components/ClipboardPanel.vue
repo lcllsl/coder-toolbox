@@ -7,22 +7,20 @@ import { useFeedbackStore } from '@/app/stores/feedback'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
 import ClipboardImagePreview from './ClipboardImagePreview.vue'
 import ClipboardImageDialog from './ClipboardImageDialog.vue'
-import type { ClipboardContentType, ClipboardItem } from '../types'
+import type { ClipboardContentType, ClipboardFilterType, ClipboardItem } from '../types'
 
 const clipboard = useClipboardStore()
 const feedback = useFeedbackStore()
 const confirmAction = ref<'selected' | 'unprotected' | 'disable-sensitive'>()
 const previewItem = ref<ClipboardItem>()
 
-const filters: { value: ClipboardContentType | 'all'; label: string }[] = [
+const filters: { value: ClipboardFilterType; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'plain_text', label: '文本' },
   { value: 'url', label: '链接' },
-  { value: 'json', label: 'JSON' },
-  { value: 'code', label: '代码' },
   { value: 'image', label: '图片' },
-  { value: 'color', label: '颜色' },
-  { value: 'email', label: '邮箱' },
+  { value: 'code', label: '代码' },
+  { value: 'other', label: '其他' },
 ]
 
 const groupedItems = computed(() => {
@@ -112,7 +110,7 @@ onMounted(() => void clipboard.initialize())
     <div class="clipboard-toolbar">
       <label class="search-box">
         <Search :size="17" aria-hidden="true" />
-        <input type="search" aria-label="搜索剪贴板" placeholder="搜索复制内容" :value="clipboard.query.search" @input="clipboard.setSearch(($event.target as HTMLInputElement).value)" />
+        <input type="search" aria-label="搜索剪贴板" placeholder="搜索复制过的文字、链接或图片" :value="clipboard.query.search" @input="clipboard.setSearch(($event.target as HTMLInputElement).value)" />
       </label>
       <button class="pause-button" :class="{ active: clipboard.settings.paused }" type="button" @click="togglePaused">
         <Play v-if="clipboard.settings.paused" :size="15" />
@@ -208,8 +206,8 @@ onMounted(() => void clipboard.initialize())
 .batch-bar strong { flex: 1; }.batch-bar button { padding: 4px 8px; border-radius: var(--radius-pill); }.batch-bar .danger { color: #d45d61; }
 .clipboard-groups { display: grid; gap: 14px; }.date-group { display: grid; gap: 8px; }.date-group > header { display: flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: var(--font-size-body-compact); font-weight: 650; }.date-group > header small { color: var(--color-text-muted); font-size: var(--font-size-caption); font-weight: 400; }
 .card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.clipboard-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-soft); transition: border-color var(--duration-fast), transform var(--duration-fast); }
-.clipboard-card:hover { border-color: color-mix(in srgb, var(--color-clipboard) 34%, var(--color-border)); transform: translateY(-1px); }.clipboard-card.pinned { border-color: color-mix(in srgb, var(--color-clipboard) 28%, var(--color-border)); }.clipboard-card.selected { box-shadow: inset 0 0 0 1px var(--color-clipboard); }
+.clipboard-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-soft); transition: border-color var(--duration-fast), transform var(--duration-fast), box-shadow var(--duration-fast); }
+.clipboard-card:hover { border-color: color-mix(in srgb, var(--color-clipboard) 34%, var(--color-border)); transform: translateY(-2px); box-shadow: var(--shadow-sm); }.clipboard-card.pinned { border-color: color-mix(in srgb, var(--color-clipboard) 28%, var(--color-border)); }.clipboard-card.selected { box-shadow: inset 0 0 0 1px var(--color-clipboard); }
 .card-body { position: relative; width: 100%; min-height: 104px; display: block; padding: 11px 12px 7px; border: 0; color: var(--color-text); text-align: left; background: transparent; cursor: pointer; }
 .type-mark { display: flex; align-items: center; gap: 5px; color: var(--color-clipboard); font-size: var(--font-size-caption); font-weight: 650; }
 .card-body pre { max-height: 72px; margin: 8px 0 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; color: var(--color-text-secondary); font-family: inherit; font-size: var(--font-size-body); line-height: 1.5; scrollbar-color: color-mix(in srgb, var(--color-clipboard) 32%, transparent) transparent; scrollbar-width: thin; white-space: pre-wrap; word-break: break-word; }

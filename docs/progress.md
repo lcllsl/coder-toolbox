@@ -16,6 +16,8 @@
 | 8. 快捷入口与设置 | 已完成，待平台复验 | 快捷入口、系统设置、全局快捷键、双击动作、开机启动、模式联动和数据清理已完成 |
 | 9. 质量与打包 | macOS 范围已完成 | 全量检查与 macOS `.app` 打包通过；Windows 安装包和 Windows 11 实机验收待执行 |
 | 10. 加密凭据夹增量 | 代码与当前环境自动化已通过 | 快捷入口第四子页、Rust 加密存储、会话锁定、敏感剪贴板与独立永久删除已接入；Windows 11 实机、安装包和原生双窗口验收待完成 |
+| 11. 信息架构与 UI 升级 | 代码与当前环境自动化已通过 | 新五分类、AI 办公模块入口、效率工具组合、文件中心重排与旧 ID 兼容已完成；Windows 11 原生窗口与多屏待实机复验 |
+| 12. Excel 智能图表 | 代码与当前环境自动化已通过 | 本地表格解析、脱敏画像、AI/本地规划、图表报告与离线 HTML 已完成；真实 DeepSeek Key 和 Windows 11 原生链路待验证 |
 
 ## 已确认技术决策
 
@@ -285,3 +287,32 @@
 - Windows 11 x64 实机上的系统剪贴板历史、云剪贴板、条件自动清理、进程重启后重新认证、数据库静态明文检查和日志检查。
 - Windows 安装包以及基于真实 Tauri 双窗口、SQLite 和系统剪贴板的端到端验收；不得用浏览器预览、类型检查或单元测试替代这些结果。
 - 如需对外分发 macOS 包，还需使用 Developer ID 完成签名、公证与 Gatekeeper 验收；macOS 系统历史排除不在当前支持范围。
+
+## 阶段 11 信息架构与 UI 升级记录
+
+2026-09-13：
+
+- 一级花瓣更新为“AI 办公、剪贴板、文件中心、效率工具、健康助手”，仍使用原扇形展开、四边自适应和 panel-window 双窗口架构。
+- 新增统一 `FEATURE_CATEGORY_CONFIGS` 注册表，集中管理一级 ID、名称、图标语义、辅助色、说明、面板尺寸、路由和状态。
+- AI 办公新增正式预留页，包含“Excel 数据分析”即将上线卡片与弱化扩展槽。本轮没有实现 AI API、Excel 解析、数据分析或 HTML 图表。
+- 原快捷入口与开发转换组合为效率工具；默认页优先显示常用、收藏和最近使用，六项转换工具及加密凭据夹作为内部子页复用原有实现。
+- 文件中心子页按“常用位置、临时中转、日期文件夹、路径工具”重排；剪贴板将搜索作为首要入口并将 JSON/颜色/邮箱/未知类型归入弱化的“其他”筛选；健康助手顶部增加今日状态、下一项和完成次数层级。
+- 兼容方面保留 `health`/`clipboard`/`files`/`quick-actions` 等业务 ID；旧 `dev-tools` 面板事件、双击动作、收藏和最近使用在前端显式归一到效率工具。未修改 SQLite schema、加密算法、剪贴板监听或健康调度逻辑，无数据迁移，无新增依赖。
+- 已验证：`pnpm typecheck` 通过；`pnpm test` 为 79/79；`pnpm build` 通过；Playwright 22 个浏览器场景分段全部通过，包含花瓣中文标签、AI 办公预留页、六项转换工具、凭据夹、文件、剪贴板和健康提醒回归。已生成并人工检查 `test-results/orb-stage2.png`、`test-results/ai-office-preview.png` 以及效率工具/文件中心/健康助手截图。
+- 待验证：Windows 11 原生面板尺寸、WebView2 渲染、四边/多显示器展开、全局快捷键及重启后真实 Tauri Store/SQLite 持久化。浏览器 E2E 不替代这些实机验收。
+
+## 阶段 12 Excel 智能图表记录
+
+2026-09-13：
+
+- AI 办公预留入口升级为“Excel 智能图表”，工作区扩展为 1040 × 760；Studio 和 SheetJS/ECharts/Zod 均按需加载，不影响悬浮球及其他面板首屏。
+- 支持点击选择、浏览器拖放与 Tauri 原生文件拖放导入 XLSX、XLS、UTF-8 CSV；包含 50 MB 硬限制、20 MB 性能提示、多 Sheet、前 12 行表头推断、重复列名修正、字段类型推断和用户修正。
+- `DataProfile` 完全在本机生成，包含字段、类型、空值、唯一值、基础数值统计和最多 12 行样例；疑似身份证、手机号、银行卡、邮箱、密码或 Token 的样例值默认替换为 `[REDACTED]`。
+- 设置页新增“AI 服务”，服务商固定为 DeepSeek，支持 V4 Flash/V4 Pro、保存/替换/移除 Key 和连接测试。Key 通过 Rust `keyring` 写入 macOS Keychain 或 Windows Credential Manager，不进入 Store、SQLite、前端持久状态或日志。
+- DeepSeek 请求仅由 Rust AI 薄层发起，采用连接 10 秒、总计 30 秒超时、JSON 输出与非思考模式；AI 只规划 `ReportSpec`。前端 Zod 和语义校验要求 3～6 张图表、已存在字段及合法数值维度，错误响应正文不会透出到 UI。
+- AI 未配置、超时、限流、网络失败或返回无效时自动使用本地推荐器。KPI、分组、排序和聚合始终基于内存中的本地原始数据计算，不采用模型生成数值。
+- 报告支持 KPI、3～6 张 ECharts 图表、标题编辑、类型切换、删除、排序、恢复和图表工具栏；时间序列过长时提供缩放。单文件 HTML 内嵌 ECharts，断网可用，并通过安全 JSON 序列化与 `textContent` 防止单元格脚本注入。
+- Tauri AI、文件读取和报告写入 command 限定 `panel-window`；文件类型、大小、报告扩展名、父目录与最大内容尺寸均在 Rust 侧再次校验。
+- 当前人工视觉检查已确认中文 CSV、KPI、折线图和柱状图正常显示；截图为 `test-results/ai-office-preview.png`。
+- 当前自动化验证：`pnpm typecheck` 通过；Vitest 15 个文件、88/88 通过；`pnpm build` 通过；Rust `fmt --check` 通过、`cargo test --all-targets` 为 32/32、`cargo clippy --all-targets -- -D warnings` 通过；Playwright 全量 22/22 通过，其中包含中文 CSV、本地回退、至少三张 ECharts 图表、AI 设置和既有模块回归。
+- 待验证：尚未使用用户真实 DeepSeek API Key 发起连接和规划请求；Windows 11 Credential Manager、WebView2、原生拖放、离线 HTML 与安装包仍需实机验证。浏览器 E2E 不替代 Tauri IPC 或系统安全存储验收。

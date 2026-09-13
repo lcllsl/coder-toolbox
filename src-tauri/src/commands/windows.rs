@@ -78,11 +78,12 @@ fn expanded_orb_placement(
 
 fn panel_size(category: &str) -> Result<LogicalSize<f64>, String> {
     match category {
-        "health" => Ok(LogicalSize::new(520.0, 560.0)),
-        "clipboard" => Ok(LogicalSize::new(680.0, 720.0)),
-        "dev-tools" => Ok(LogicalSize::new(760.0, 620.0)),
-        "files" => Ok(LogicalSize::new(620.0, 620.0)),
-        "quick-actions" | "settings" => Ok(LogicalSize::new(560.0, 540.0)),
+        "ai-office" => Ok(LogicalSize::new(1040.0, 760.0)),
+        "health" => Ok(LogicalSize::new(560.0, 600.0)),
+        "clipboard" => Ok(LogicalSize::new(720.0, 700.0)),
+        "files" => Ok(LogicalSize::new(680.0, 640.0)),
+        "dev-tools" | "quick-actions" => Ok(LogicalSize::new(740.0, 650.0)),
+        "settings" => Ok(LogicalSize::new(560.0, 540.0)),
         _ => Err("unknown_panel_category".to_owned()),
     }
 }

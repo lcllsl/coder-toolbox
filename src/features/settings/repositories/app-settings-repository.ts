@@ -1,12 +1,17 @@
 import { load } from '@tauri-apps/plugin-store'
 
 import { isTauriRuntime } from '@/services/tauri/runtime'
-import type { AppSettings, VaultAutoLockMinutes } from '../types'
+import type { AiModel, AppSettings, VaultAutoLockMinutes } from '../types'
 
 const STORE_KEY = 'appSettings'
 const BROWSER_KEY = 'petal-toolbox.app-settings'
 const DEFAULT_VAULT_AUTO_LOCK_MINUTES: VaultAutoLockMinutes = 5
 const VAULT_AUTO_LOCK_OPTIONS = new Set<VaultAutoLockMinutes>([1, 5, 15, 30])
+const AI_MODELS = new Set<AiModel>(['deepseek-v4-flash', 'deepseek-v4-pro'])
+
+export function normalizeAiModel(value: unknown): AiModel {
+  return typeof value === 'string' && AI_MODELS.has(value as AiModel) ? value as AiModel : 'deepseek-v4-flash'
+}
 
 export function shouldConfigureVaultAutoLock(
   nativeRuntime: boolean,
@@ -30,6 +35,8 @@ export function createDefaultAppSettings(): AppSettings {
     orbSize: 56,
     orbOpacity: 1,
     vaultAutoLockMinutes: DEFAULT_VAULT_AUTO_LOCK_MINUTES,
+    aiModel: 'deepseek-v4-flash',
+    aiPrivacyNoticeDismissed: false,
   }
 }
 
@@ -46,6 +53,8 @@ export async function loadAppSettings(): Promise<AppSettings> {
       orbSize: Math.min(68, Math.max(48, saved.orbSize ?? defaults.orbSize)),
       orbOpacity: Math.min(1, Math.max(.6, saved.orbOpacity ?? defaults.orbOpacity)),
       vaultAutoLockMinutes: normalizeVaultAutoLockMinutes(saved.vaultAutoLockMinutes),
+      aiModel: normalizeAiModel(saved.aiModel),
+      aiPrivacyNoticeDismissed: saved.aiPrivacyNoticeDismissed === true,
     }
   } catch {
     return defaults

@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Component } from 'vue'
 import type { UnlistenFn } from '@tauri-apps/api/event'
-import { Clipboard, CodeXml, FolderOpen, HeartPulse, Settings, Zap } from '@lucide/vue'
+import { BriefcaseBusiness, Clipboard, FolderOpen, HeartPulse, Settings, Sparkles } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 
 import { useFeedbackStore } from '@/app/stores/feedback'
@@ -11,7 +11,7 @@ import { usePanelStore, type PanelView } from '@/app/stores/panel'
 import { useQuickActionsStore } from '@/app/stores/quick-actions'
 import PanelShell from '@/components/panel/PanelShell.vue'
 import UiToastHost from '@/components/ui/UiToastHost.vue'
-import DeveloperToolsPanel from '@/features/dev-tools/components/DeveloperToolsPanel.vue'
+import AiOfficePanel from '@/features/ai-office/components/AiOfficePanel.vue'
 import HealthPanel from '@/features/health/components/HealthPanel.vue'
 import ClipboardPanel from '@/features/clipboard/components/ClipboardPanel.vue'
 import FilesPanel from '@/features/files/components/FilesPanel.vue'
@@ -22,16 +22,16 @@ import { onClipboardHistoryChanged } from '@/services/tauri/clipboard'
 import {
   CATEGORY_LABELS,
   CATEGORY_PRESENTATION,
-  isPanelCategory,
+  normalizePanelCategory,
   type PanelCategory,
 } from '@/types/navigation'
 
 const icons: Record<PanelCategory, Component> = {
+  'ai-office': Sparkles,
   health: HeartPulse,
   clipboard: Clipboard,
-  'dev-tools': CodeXml,
   files: FolderOpen,
-  'quick-actions': Zap,
+  'quick-actions': BriefcaseBusiness,
 }
 
 const panelStore = usePanelStore()
@@ -41,8 +41,10 @@ const quickActions = useQuickActionsStore()
 const router = useRouter()
 const closing = ref(false)
 const previewCloseMode = ref('')
+const quickInitialView = ref<'overview' | 'tools'>('overview')
+const quickPanelKey = ref(0)
 const activeCategory = computed(() =>
-  isPanelCategory(panelStore.activeView) ? panelStore.activeView : null,
+  panelStore.activeView !== 'settings' ? panelStore.activeView : null,
 )
 const title = computed(() =>
   panelStore.activeView === 'settings' ? '设置' : CATEGORY_LABELS[panelStore.activeView],
@@ -60,7 +62,11 @@ const isFavorite = computed(() =>
 let unlisten: UnlistenFn | undefined
 let unlistenClipboardHistory: UnlistenFn | undefined
 
-async function selectView(view: PanelView) {
+async function selectView(view: PanelView, quickView: 'overview' | 'tools' = 'overview') {
+  if (view === 'quick-actions') {
+    quickInitialView.value = quickView
+    quickPanelKey.value += 1
+  }
   panelStore.selectView(view)
   const target = view === 'settings' ? '/settings' : `/category/${view}`
   if (router.currentRoute.value.path !== target) await router.replace(target)
@@ -106,7 +112,11 @@ onMounted(async () => {
   await clipboardStore.initialize(false)
   unlistenClipboardHistory = await onClipboardHistoryChanged(() => void clipboardStore.reload())
   unlisten = await onPanelNavigate(({ category }) => {
-    if (category === 'settings' || isPanelCategory(category)) void selectView(category)
+    if (category === 'settings') void selectView(category)
+    else {
+      const normalized = normalizePanelCategory(category)
+      if (normalized) void selectView(normalized, category === 'dev-tools' ? 'tools' : 'overview')
+    }
   })
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('panel:preview-close', handlePreviewClose)
@@ -129,6 +139,7 @@ onUnmounted(() => {
   >
     <PanelShell
       :title="title"
+      :summary="presentation?.summary"
       :accent="presentation?.accent"
       :favorite="isFavorite"
       :show-favorite="Boolean(activeCategory)"
@@ -142,19 +153,19 @@ onUnmounted(() => {
         <component :is="activeIcon" :size="20" :stroke-width="1.8" />
       </template>
 
-      <Transition name="view" mode="out-in">
-        <DeveloperToolsPanel v-if="activeCategory === 'dev-tools'" key="dev-tools" />
+      <div :key="activeCategory === 'quick-actions' ? `quick-${quickPanelKey}` : panelStore.activeView" class="panel-view">
+        <AiOfficePanel v-if="activeCategory === 'ai-office'" />
 
-        <HealthPanel v-else-if="activeCategory === 'health'" key="health" />
+        <HealthPanel v-else-if="activeCategory === 'health'" />
 
-        <ClipboardPanel v-else-if="activeCategory === 'clipboard'" key="clipboard" />
+        <ClipboardPanel v-else-if="activeCategory === 'clipboard'" />
 
-        <FilesPanel v-else-if="activeCategory === 'files'" key="files" />
+        <FilesPanel v-else-if="activeCategory === 'files'" />
 
-        <QuickActionsPanel v-else-if="activeCategory === 'quick-actions'" key="quick-actions" @navigate="selectView" />
+        <QuickActionsPanel v-else-if="activeCategory === 'quick-actions'" :initial-view="quickInitialView" @navigate="selectView" />
 
-        <SettingsPanel v-else key="settings" />
-      </Transition>
+        <SettingsPanel v-else />
+      </div>
     </PanelShell>
     <UiToastHost />
   </main>
@@ -169,10 +180,6 @@ onUnmounted(() => {
 }
 
 .panel-stage.closing { opacity: 0; transform: scale(0.975) translateY(6px); }
-
-.view-enter-active,
-.view-leave-active { transition: opacity 180ms var(--ease-standard), transform 180ms var(--ease-standard); }
-.view-enter-from { opacity: 0; transform: translateX(10px); }
-.view-leave-to { opacity: 0; transform: translateX(-8px); }
+.panel-view { min-height: 100%; }
 
 </style>

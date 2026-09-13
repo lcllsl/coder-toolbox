@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Clipboard, CodeXml, FolderOpen, HeartPulse, Zap } from '@lucide/vue'
+import { BriefcaseBusiness, Clipboard, FolderOpen, HeartPulse, Sparkles } from '@lucide/vue'
 
 import type { Component } from 'vue'
 import type { PanelCategory } from '@/types/navigation'
@@ -15,11 +15,11 @@ const emit = defineEmits<{
 }>()
 
 const icons: Record<PanelCategory, Component> = {
+  'ai-office': Sparkles,
   health: HeartPulse,
   clipboard: Clipboard,
-  'dev-tools': CodeXml,
   files: FolderOpen,
-  'quick-actions': Zap,
+  'quick-actions': BriefcaseBusiness,
 }
 </script>
 
@@ -123,8 +123,8 @@ const icons: Record<PanelCategory, Component> = {
   --petal-accent: var(--color-clipboard);
 }
 
-.petal[data-category='dev-tools'] {
-  --petal-accent: var(--color-dev-tools);
+.petal[data-category='ai-office'] {
+  --petal-accent: var(--color-ai-office);
 }
 
 .petal[data-category='files'] {
@@ -133,5 +133,9 @@ const icons: Record<PanelCategory, Component> = {
 
 .petal[data-category='quick-actions'] {
   --petal-accent: var(--color-quick-actions);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal:hover .petal-icon { transform: none; }
 }
 </style>

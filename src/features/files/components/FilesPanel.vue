@@ -29,9 +29,9 @@ let unlistenFileDrop: (() => void) | undefined
 
 const tabs: { id: FilesView; label: string; icon: typeof Folder }[] = [
   { id: 'folders', label: '常用位置', icon: FolderOpen },
-  { id: 'paths', label: '路径转换', icon: FileInput },
-  { id: 'date', label: '日期文件夹', icon: CalendarPlus },
   { id: 'transfer', label: '临时中转', icon: HardDrive },
+  { id: 'date', label: '日期文件夹', icon: CalendarPlus },
+  { id: 'paths', label: '路径工具', icon: FileInput },
 ]
 
 const dateFolderPreview = computed(() => buildDateFolderName(dateFormat.value, dateTopic.value))
@@ -144,7 +144,7 @@ onUnmounted(() => unlistenFileDrop?.())
 
 <template>
   <section class="files-panel">
-    <nav class="files-tabs" aria-label="文件与路径工具">
+    <nav class="files-tabs" aria-label="文件中心工具">
       <button v-for="tab in tabs" :key="tab.id" type="button" :class="{ active: activeView === tab.id }" @click="activeView = tab.id">
         <component :is="tab.icon" :size="16" />{{ tab.label }}
       </button>

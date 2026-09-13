@@ -112,10 +112,15 @@ export async function markClipboardItemCopied(id: string, at: string): Promise<v
 }
 
 export async function listClipboardItems(query: ClipboardQuery = {}): Promise<ClipboardItem[]> {
+  const matchesType = (item: ClipboardItem) => !query.type
+    || query.type === 'all'
+    || (query.type === 'other'
+      ? ['json', 'color', 'email', 'unknown'].includes(item.type)
+      : item.type === query.type)
   if (!isTauriRuntime()) {
     const search = query.search?.toLocaleLowerCase()
     return browserItems()
-      .filter((item) => !query.type || query.type === 'all' || item.type === query.type)
+      .filter(matchesType)
       .filter((item) => !query.favoritesOnly || item.isFavorite)
       .filter((item) => !search || item.textContent?.toLocaleLowerCase().includes(search) || item.previewText?.toLocaleLowerCase().includes(search))
       .sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt.localeCompare(a.updatedAt))
@@ -130,7 +135,7 @@ export async function listClipboardItems(query: ClipboardQuery = {}): Promise<Cl
   )
   const search = query.search?.toLocaleLowerCase()
   return rows.map(mapRow)
-    .filter((item) => !query.type || query.type === 'all' || item.type === query.type)
+    .filter(matchesType)
     .filter((item) => !query.favoritesOnly || item.isFavorite)
     .filter((item) => !search || item.textContent?.toLocaleLowerCase().includes(search) || item.previewText?.toLocaleLowerCase().includes(search))
 }

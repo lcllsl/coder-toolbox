@@ -5,6 +5,7 @@ import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 defineProps<{
   title: string
+  summary?: string
   accent?: string
   favorite?: boolean
   showFavorite?: boolean
@@ -30,7 +31,7 @@ const emit = defineEmits<{
         </UiTooltip>
         <span class="category-mark" aria-hidden="true"><slot name="icon" /></span>
         <div>
-          <p class="eyebrow">冒泡</p>
+          <p class="eyebrow">{{ summary ?? '冒泡' }}</p>
           <h1>{{ title }}</h1>
         </div>
       </div>
@@ -109,9 +110,12 @@ const emit = defineEmits<{
 .eyebrow {
   margin: 0 0 2px;
   color: var(--color-text-muted);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  max-width: 430px;
+  overflow: hidden;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 h1 {

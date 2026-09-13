@@ -19,7 +19,7 @@ import {
   loadClipboardSettings,
   saveClipboardSettings,
 } from '@/features/clipboard/repositories/clipboard-settings-repository'
-import type { ClipboardContentType, ClipboardItem, ClipboardQuery, ClipboardSettings } from '@/features/clipboard/types'
+import type { ClipboardFilterType, ClipboardItem, ClipboardQuery, ClipboardSettings } from '@/features/clipboard/types'
 import {
   deleteClipboardImage,
   getClipboardSequenceNumber,
@@ -210,7 +210,7 @@ export const useClipboardStore = defineStore('clipboard', {
       this.query = { ...this.query, search }
       await this.reload()
     },
-    async setType(type: ClipboardContentType | 'all') {
+    async setType(type: ClipboardFilterType) {
       this.query = { ...this.query, type }
       await this.reload()
     },

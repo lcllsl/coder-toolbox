@@ -1,3 +1,4 @@
+mod ai;
 mod commands;
 mod tray;
 mod vault;
@@ -94,6 +95,14 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::ai::ai_status,
+            commands::ai::ai_save_api_key,
+            commands::ai::ai_delete_api_key,
+            commands::ai::ai_test_connection,
+            commands::ai::ai_generate_chart_plan,
+            commands::ai::read_spreadsheet_file,
+            commands::ai::write_report_html,
+            commands::ai::open_report_html,
             commands::clipboard::clipboard_sequence_number,
             commands::clipboard::clipboard_should_ignore_sensitive,
             commands::files::system_directories,

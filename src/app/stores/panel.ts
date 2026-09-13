@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
 import { loadPanelPreferences, savePanelPreferences } from '@/features/settings/repositories/panel-preferences-repository'
-import type { PanelCategory } from '@/types/navigation'
+import { normalizePanelCategory, type PanelCategory } from '@/types/navigation'
 
 export type PanelView = PanelCategory | 'settings'
 export type ThemePreference = 'system' | 'light' | 'dark'
@@ -22,7 +22,7 @@ export const usePanelStore = defineStore('panel', {
       const saved = await loadPanelPreferences()
       if (saved) {
         this.theme = saved.theme
-        this.favorites = saved.favorites
+        this.favorites = [...new Set(saved.favorites.map(normalizePanelCategory).filter((value): value is PanelCategory => Boolean(value)))]
       }
       this.initialized = true
       this.applyTheme()

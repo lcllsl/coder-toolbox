@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { cursorPosition, getCurrentWindow, LogicalPosition } from '@tauri-apps/api/window'
 
-import type { PanelCategory, PanelNavigationPayload } from '@/types/navigation'
+import type { NavigablePanelCategory, PanelNavigationPayload } from '@/types/navigation'
 import type { ReminderId } from '@/features/health/types'
 import type { HitRegion, OrbWindowGeometry, Point, SnapEdge, SnapResult } from '@/types/orb'
 import { containsPoint } from '@/utils/petal-layout'
@@ -11,7 +11,7 @@ import { isTauriRuntime } from './runtime'
 const PANEL_NAVIGATE_EVENT = 'panel:navigate'
 const ORB_PANEL_CLOSED_EVENT = 'orb:panel-closed'
 
-export async function openPanel(category: PanelCategory): Promise<void> {
+export async function openPanel(category: NavigablePanelCategory): Promise<void> {
   if (!isTauriRuntime()) {
     window.dispatchEvent(
       new CustomEvent<PanelNavigationPayload>(PANEL_NAVIGATE_EVENT, {

@@ -27,7 +27,7 @@ import {
   startOrbHitTest,
 } from '@/services/tauri/windows'
 import type { Point } from '@/types/orb'
-import { PANEL_CATEGORIES, type PanelCategory } from '@/types/navigation'
+import { PANEL_CATEGORIES, type NavigablePanelCategory } from '@/types/navigation'
 import { computePetalLayout, createOrbHitRegions } from '@/utils/petal-layout'
 
 const DRAG_THRESHOLD = 5
@@ -279,8 +279,7 @@ async function handleOrbTap() {
   }
   if (clickTimer !== undefined) {
     clearClickTimer()
-    const category = action === 'quick-actions' ? 'quick-actions' : action
-    await selectCategory(category)
+    await selectCategory(action)
     return
   }
   clickTimer = window.setTimeout(() => {
@@ -302,7 +301,7 @@ async function applyRuntimeMode(mode: AppMode) {
   }
 }
 
-async function selectCategory(category: PanelCategory) {
+async function selectCategory(category: NavigablePanelCategory) {
   if (!orbStore.transitionTo('panel-opening')) return
   clearTransitionTimer()
   await disableExpandedHitTest()
