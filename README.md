@@ -19,8 +19,9 @@
 - 悬浮球吸附位置本地保存并按多显示器工作区恢复。
 - 五类独立功能面板、通用标题栏、主题、Toast、Confirm 与 Tooltip。
 - 健康提醒、文本与图片剪贴板、六项开发转换、文件与路径、快捷入口五类模块。
+- 快捷入口第四子页“加密凭据夹”：Rust 认证加密、本地凭据卡片、敏感剪贴板与自动锁定。
 - 全局快捷键、悬浮球双击动作、开机启动、三种运行模式和本地数据清理。
-- 53 个前端单元测试、7 个 Rust 测试与 19 个浏览器交互场景。
+- 78 个前端单元测试、28 个 Rust 测试与 21 个浏览器预览交互场景。
 
 使用方法见 [用户说明](docs/user-guide.md)，详细状态见 [开发进度](docs/progress.md)，完整需求见 [产品说明](docs/product-spec.md)。
 
@@ -58,12 +59,20 @@ pnpm dev
 
 ## 验证
 
+首次运行浏览器回归前安装 Playwright Chromium：
+
+```bash
+pnpm exec playwright install chromium
+```
+
 ```bash
 pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
 cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
 macOS 应用打包：
@@ -76,10 +85,10 @@ pnpm tauri build --bundles app
 
 ## 隐私与安全
 
-核心功能按离线运行设计，不包含遥测和内容上传。Tauri capability 按窗口拆分，系统调用通过前端适配层与受控 Rust command 暴露。剪贴板、JWT、文件路径等用户内容不得写入普通日志。
+核心功能按离线运行设计，不包含遥测和内容上传。Tauri capability 按窗口拆分，系统调用通过前端适配层与受控 Rust command 暴露。凭据 payload 单独应用层加密，不代表普通业务数据或整个 SQLite 数据库已加密。剪贴板、凭据、JWT、文件路径等用户内容不得写入普通日志。
 
 ## 平台说明
 
-- macOS：用于开发期运行和跨平台逻辑验证。
-- Windows 11 x64：正式验收目标；透明窗口命中、多显示器缩放、全局快捷键、开机启动、外部应用启动和安装包必须在 Windows 设备复验。
+- macOS：用于开发期运行和跨平台逻辑验证；凭据复制不支持等价的系统剪贴板历史排除，仅提供冒泡自身历史忽略与条件自动清理。
+- Windows 11 x64：正式验收目标；凭据夹系统历史/云剪贴板、条件清理、真实 Tauri 双窗口 E2E 与安装包均尚未实机验证；透明窗口命中、多显示器缩放、全局快捷键、开机启动和外部应用启动也必须在 Windows 设备复验。
 - Linux：不在第一版验收范围。
