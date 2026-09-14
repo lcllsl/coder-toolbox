@@ -218,7 +218,11 @@ mod tests {
 
     #[test]
     fn report_path_must_be_html_in_existing_directory() {
-        assert!(validated_html_path("/tmp/report.html").is_ok());
-        assert!(validated_html_path("/tmp/report.js").is_err());
+        let temp_dir = std::env::temp_dir();
+        let html_path = temp_dir.join("report.html");
+        let script_path = temp_dir.join("report.js");
+
+        assert!(validated_html_path(&html_path.to_string_lossy()).is_ok());
+        assert!(validated_html_path(&script_path.to_string_lossy()).is_err());
     }
 }
