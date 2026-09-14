@@ -37,6 +37,7 @@ export function createDefaultAppSettings(): AppSettings {
     vaultAutoLockMinutes: DEFAULT_VAULT_AUTO_LOCK_MINUTES,
     aiModel: 'deepseek-v4-flash',
     aiPrivacyNoticeDismissed: false,
+    smartTablePrivacyNoticeDismissed: false,
   }
 }
 
@@ -55,6 +56,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
       vaultAutoLockMinutes: normalizeVaultAutoLockMinutes(saved.vaultAutoLockMinutes),
       aiModel: normalizeAiModel(saved.aiModel),
       aiPrivacyNoticeDismissed: saved.aiPrivacyNoticeDismissed === true,
+      smartTablePrivacyNoticeDismissed: saved.smartTablePrivacyNoticeDismissed === true,
     }
   } catch {
     return defaults

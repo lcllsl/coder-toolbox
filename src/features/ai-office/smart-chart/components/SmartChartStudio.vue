@@ -6,12 +6,12 @@ import { useFeedbackStore } from '@/app/stores/feedback'
 import { useSettingsStore } from '@/app/stores/settings'
 import { createDataProfile } from '../excel/profiler'
 import { createDataset, decodeBase64Utf8, parseSpreadsheetFile, parseWorkbookData, renameDatasetColumn, SPREADSHEET_WARNING_BYTES, updateColumnKind } from '../excel/parser'
-import { createLocalReportSpec } from '../recommendation/localRecommender'
+import { createLocalReportSpec, hasChartableColumns } from '../recommendation/localRecommender'
 import { deleteSavedChartProject, getSavedChartProject, listSavedChartProjects, renameSavedChartProject, saveChartProject } from '../repositories/saved-chart-repository'
 import { buildReport } from '../report/dataProcessor'
 import { createReportFileName, exportReportHtml } from '../report/htmlExporter'
 import { reportValidationMessage, validateReportSpec } from '../report/validator'
-import { COLUMN_KIND_LABELS, NUMERIC_COLUMN_KINDS, type ChartSpec, type ChartType, type ColumnKind, type KpiSpec, type ParsedWorkbook, type ReportSpec, type SavedChartSummary, type TabularDataset } from '../types'
+import { COLUMN_KIND_LABELS, type ChartSpec, type ChartType, type ColumnKind, type KpiSpec, type ParsedWorkbook, type ReportSpec, type SavedChartSummary, type TabularDataset } from '../types'
 import { aiErrorMessage, generateAiChartPlan, getAiStatus, openReportHtml, readNativeSpreadsheet, saveReportHtml } from '@/services/tauri/ai'
 import { onFileSystemDrop } from '@/services/tauri/files'
 import { showSettings } from '@/services/tauri/windows'
@@ -20,6 +20,7 @@ import ChartNameDialog from './ChartNameDialog.vue'
 import PrivacyDialog from './PrivacyDialog.vue'
 
 const emit = defineEmits<{ back: [] }>()
+const props = defineProps<{ initialDataset?: TabularDataset }>()
 type Stage = 'library' | 'import' | 'prepare' | 'generating' | 'report'
 const feedback = useFeedbackStore()
 const settings = useSettingsStore()
@@ -58,6 +59,7 @@ const activeSheet = computed(() => workbook.value?.sheets[sheetIndex.value])
 const toolbarLabel = computed(() => stage.value === 'library' ? '返回 AI 办公' : '返回图表列表')
 
 function handleToolbarBack() {
+  if (props.initialDataset && stage.value === 'prepare') { emit('back'); return }
   if (stage.value === 'library') emit('back')
   else resetAll('library')
 }
@@ -188,7 +190,7 @@ function renameColumn(key: string, value: string, input: HTMLInputElement) {
 
 async function requestGeneration() {
   if (!dataset.value || !dataset.value.rows.length) { feedback.notify('所选工作表没有可用数据', 'warning'); return }
-  if (!dataset.value.columns.some((column) => NUMERIC_COLUMN_KINDS.has(column.kind))) { feedback.notify('请先把至少一个数值字段修正为数字、金额或百分比', 'warning'); return }
+  if (!hasChartableColumns(createDataProfile(dataset.value))) { feedback.notify('没有可用于数值分析或分类统计的字段', 'warning'); return }
   if (hasApiKey.value && !settings.settings.aiPrivacyNoticeDismissed && !sessionPrivacyAccepted.value) {
     privacyOpen.value = true
     return
@@ -344,7 +346,15 @@ function resetAll(nextStage: 'library' | 'import' = 'library') {
 
 onMounted(async () => {
   await settings.initialize()
-  await refreshLibrary()
+  if (props.initialDataset) {
+    dataset.value = {
+      ...props.initialDataset,
+      columns: props.initialDataset.columns.map((column) => ({ ...column })),
+      rows: props.initialDataset.rows.map((row) => ({ ...row })),
+    }
+    stage.value = 'prepare'
+    generationNotice.value = '数据来自智能表格，可检查字段后直接规划图表。'
+  } else await refreshLibrary()
   try { hasApiKey.value = (await getAiStatus()).hasApiKey } catch { hasApiKey.value = false }
   unlistenDrop = await onFileSystemDrop((paths) => { if (paths[0]) void loadNativePath(paths[0]) })
 })

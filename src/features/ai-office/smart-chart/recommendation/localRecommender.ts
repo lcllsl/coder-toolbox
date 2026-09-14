@@ -5,12 +5,16 @@ function idFor(prefix: string, index: number) {
   return `${prefix}-${index + 1}`
 }
 
+export function hasChartableColumns(profile: DataProfile): boolean {
+  return profile.columns.some((column) => !column.sensitive && !['id', 'long_text', 'unknown'].includes(column.type))
+}
+
 export function createLocalReportSpec(profile: DataProfile): ReportSpec {
   const usable = profile.columns.filter((column) => !column.sensitive && !['id', 'long_text', 'unknown'].includes(column.type))
   const numbers = usable.filter((column) => NUMERIC_COLUMN_KINDS.has(column.type))
   const dates = usable.filter((column) => ['date', 'datetime'].includes(column.type))
   const categories = usable.filter((column) => ['category', 'text', 'boolean'].includes(column.type))
-  const fallbackCategory = dates[0] ?? categories[0] ?? numbers[0] ?? profile.columns[0]
+  const fallbackCategory = dates[0] ?? categories[0] ?? numbers[0]
   const fallbackValue = numbers[0]
 
   const kpis: KpiSpec[] = numbers.slice(0, 3).map((column, index) => ({
@@ -48,6 +52,26 @@ export function createLocalReportSpec(profile: DataProfile): ReportSpec {
       charts.push({
         id: idFor('overview', index), title: `${fallbackValue.name}概览 ${index + 1}`, type: fillTypes[index % fillTypes.length],
         categoryField: fallbackCategory.name, valueFields: [fallbackValue.name], aggregation: fallbackValue.type === 'percentage' ? 'avg' : 'sum', sort: index ? 'desc' : 'none', limit: 12,
+      })
+    }
+  }
+
+  if (!fallbackValue) {
+    const countDimensions = [...categories, ...dates].sort((left, right) => {
+      const leftUseful = left.uniqueCount >= 2 && left.uniqueCount <= 50 ? 0 : 1
+      const rightUseful = right.uniqueCount >= 2 && right.uniqueCount <= 50 ? 0 : 1
+      return leftUseful - rightUseful || left.uniqueCount - right.uniqueCount
+    })
+    const fallbackDimension = countDimensions[0] ?? fallbackCategory
+    const countTypes: ChartSpec['type'][] = ['bar', 'donut', 'horizontal-bar']
+    while (charts.length < 3 && fallbackDimension) {
+      const index = charts.length
+      const dimension = countDimensions[index] ?? fallbackDimension
+      charts.push({
+        id: idFor('count', index), title: `按${dimension.name}统计记录数`,
+        description: `统计各${dimension.name}分类下的数据记录数量。`,
+        type: countTypes[index % countTypes.length], categoryField: dimension.name,
+        valueFields: [dimension.name], aggregation: 'count', sort: 'desc', limit: 12,
       })
     }
   }

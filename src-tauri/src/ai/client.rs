@@ -150,7 +150,7 @@ pub async fn generate_chart_plan(
 - 所有 id 在 KPI 和图表之间全局唯一。
 - field、categoryField 和 valueFields 必须逐字复制 DataProfile.columns[].name，不得翻译、缩写或创造字段。
 - KPI field 仅在 aggregation=count 时可以为 "*"；其他聚合只能使用 number/currency/percentage 字段。
-- valueFields 只能使用 number/currency/percentage 字段，数量为 1到4。scatter 的 categoryField 也必须是数值字段。
+- valueFields 数量为 1到4。sum/avg/max/min 时只能使用 number/currency/percentage 字段；count 时可使用现有的非敏感分类、文本、布尔或日期字段，并把 valueFields 设为 categoryField，表示按该字段统计记录数。scatter 的 categoryField 也必须是数值字段，且不得用于纯计数统计。
 - aggregation 仅 sum/avg/max/min/count；format 仅 number/currency/percentage。
 - type 仅 bar/horizontal-bar/line/area/pie/donut/scatter；sort 仅 none/asc/desc；limit 为 null 或 1到50 的整数。
 - 排除 sensitive=true、id、联系方式和长文本字段。
@@ -160,6 +160,73 @@ pub async fn generate_chart_plan(
     );
     let user = format!("请基于以下 DataProfile 输出 JSON 图表规划：\n{profile_json}");
     request_json(api_key, model, &system, &user, 2400).await
+}
+
+pub async fn detect_table_schema(
+    api_key: &str,
+    model: &str,
+    source_sample: &str,
+    target_description: &str,
+    template_name: &str,
+    validation_reason: Option<&str>,
+) -> Result<Value, String> {
+    if source_sample.len() > 64 * 1024 || target_description.len() > 2_000 {
+        return Err("smart_table_input_too_large".to_owned());
+    }
+    let correction = validation_reason
+        .map(|reason| format!("\n上次输出未通过校验：{reason}。请修正后重新输出。"))
+        .unwrap_or_default();
+    let system = format!(
+        r#"你是“冒泡智能表格”的表格结构识别引擎。你当前只设计表格结构，不提取完整记录。只能基于用户提供的信息设计字段，不联网补充，不推测不存在的事实。用户明确指定字段或只要某些字段时必须遵守。字段通常控制在3到10个，名称使用简洁中文，id 使用唯一的英文或拼音 snake_case。
+
+字段类型只能是 text、number、currency、percentage、date、datetime、boolean、category、phone、email、id。电话必须是 phone；工号、身份证、订单号、SKU、序列号和含前导零编号必须是 id。输入中的 __PHONE_0001__ 等占位符必须逐字保留，不得修改、推测或新增。
+
+只能输出严格 JSON，不要 Markdown、解释或额外字段：
+{{"version":1,"tableTitle":"","columns":[{{"id":"","label":"","type":"text","description":"","sensitive":false}}]}}{correction}"#
+    );
+    let user = format!(
+        "请为以下杂乱信息设计表格结构。\n用户希望整理成：{}\n已选择模板：{}\n原始信息样本：\n{}",
+        if target_description.trim().is_empty() {
+            "自动识别"
+        } else {
+            target_description
+        },
+        template_name,
+        source_sample
+    );
+    request_json(api_key, model, &system, &user, 1800).await
+}
+
+pub async fn extract_table_rows(
+    api_key: &str,
+    model: &str,
+    schema: &Value,
+    source_blocks: &Value,
+    validation_reason: Option<&str>,
+) -> Result<Value, String> {
+    let schema_json = serde_json::to_string(schema).map_err(|_| "smart_table_schema_invalid")?;
+    let blocks_json =
+        serde_json::to_string(source_blocks).map_err(|_| "smart_table_sources_invalid")?;
+    if schema_json.len() > 64 * 1024 || blocks_json.len() > 192 * 1024 {
+        return Err("smart_table_input_too_large".to_owned());
+    }
+    let correction = validation_reason
+        .map(|reason| format!("\n上次输出未通过校验：{reason}。请修正后重新输出。"))
+        .unwrap_or_default();
+    let system = format!(
+        r#"你是“冒泡智能表格”的结构化信息提取引擎。严格按固定 Schema 从原文提取记录。只能提取原文明确信息，不得根据常识补齐或推测；缺失字段返回 null。不得新增、删除、改名字段，不得合并没有明确依据的记录。
+
+允许在含义明确时转换：1.2万为12000，18.5%为0.185，明确年份的日期标准化为YYYY-MM-DD，“是/否”为布尔值。缺少年份或“月底、近期、尽快”等模糊日期不得精确化，保留原意并标记 low。confidence 只能是 high、medium、low。
+
+每条记录必须返回真实相关的 sourceIds。隐私占位符必须逐字复制，不得修改、拆分、还原或新增。values 必须且只能包含 Schema 定义的全部 columnId。
+
+只能输出严格 JSON，不要 Markdown、解释或额外字段：
+{{"version":1,"rows":[{{"id":"row-1","values":{{"<columnId>":null}},"sourceIds":["source-1"],"confidence":"high","warnings":[]}}]}}{correction}"#
+    );
+    let user = format!(
+        "请严格按照以下固定 Schema 提取记录。\nSchema：{schema_json}\n本批原始信息：{blocks_json}"
+    );
+    request_json(api_key, model, &system, &user, 6000).await
 }
 
 fn report_spec_example(profile: &Value) -> Result<String, String> {
@@ -175,36 +242,51 @@ fn report_spec_example(profile: &Value) -> Result<String, String> {
                 Some("number" | "currency" | "percentage")
             ) && column.get("sensitive").and_then(Value::as_bool) != Some(true)
         })
-        .and_then(|column| column.get("name").and_then(Value::as_str))
-        .ok_or_else(|| "ai_profile_invalid".to_owned())?;
+        .and_then(|column| column.get("name").and_then(Value::as_str));
     let category = columns
         .iter()
         .find(|column| {
-            !matches!(
+            matches!(
                 column.get("type").and_then(Value::as_str),
-                Some("id" | "long_text" | "unknown")
+                Some("category" | "text" | "boolean" | "date" | "datetime")
             ) && column.get("sensitive").and_then(Value::as_bool) != Some(true)
         })
-        .and_then(|column| column.get("name").and_then(Value::as_str))
-        .unwrap_or(numeric);
-    let format = columns
-        .iter()
-        .find(|column| column.get("name").and_then(Value::as_str) == Some(numeric))
-        .and_then(|column| column.get("type").and_then(Value::as_str))
-        .filter(|kind| matches!(*kind, "currency" | "percentage"))
-        .unwrap_or("number");
-    serde_json::to_string_pretty(&json!({
-        "version": 1,
-        "reportTitle": "数据分析报告",
-        "reportSubtitle": "基于导入数据的可视化规划",
-        "kpis": [{ "id": "kpi-1", "label": format!("{numeric}合计"), "field": numeric, "aggregation": "sum", "format": format }],
-        "charts": [
-            { "id": "chart-1", "title": format!("{numeric}分析"), "description": "按维度查看数值分布", "type": "bar", "categoryField": category, "valueFields": [numeric], "aggregation": "sum", "sort": "desc", "limit": 20 },
-            { "id": "chart-2", "title": format!("{numeric}趋势"), "description": "查看数值变化", "type": "line", "categoryField": category, "valueFields": [numeric], "aggregation": "sum", "sort": "none", "limit": null },
-            { "id": "chart-3", "title": format!("{numeric}占比"), "description": "查看各维度占比", "type": "donut", "categoryField": category, "valueFields": [numeric], "aggregation": "sum", "sort": "desc", "limit": 12 }
-        ]
-    }))
-    .map_err(|_| "ai_profile_invalid".to_owned())
+        .and_then(|column| column.get("name").and_then(Value::as_str));
+    let dimension = category
+        .or(numeric)
+        .ok_or_else(|| "ai_profile_invalid".to_owned())?;
+    let example = if let Some(numeric) = numeric {
+        let format = columns
+            .iter()
+            .find(|column| column.get("name").and_then(Value::as_str) == Some(numeric))
+            .and_then(|column| column.get("type").and_then(Value::as_str))
+            .filter(|kind| matches!(*kind, "currency" | "percentage"))
+            .unwrap_or("number");
+        json!({
+            "version": 1,
+            "reportTitle": "数据分析报告",
+            "reportSubtitle": "基于导入数据的可视化规划",
+            "kpis": [{ "id": "kpi-1", "label": format!("{numeric}合计"), "field": numeric, "aggregation": "sum", "format": format }],
+            "charts": [
+                { "id": "chart-1", "title": format!("{numeric}分析"), "description": "按维度查看数值分布", "type": "bar", "categoryField": dimension, "valueFields": [numeric], "aggregation": "sum", "sort": "desc", "limit": 20 },
+                { "id": "chart-2", "title": format!("{numeric}趋势"), "description": "查看数值变化", "type": "line", "categoryField": dimension, "valueFields": [numeric], "aggregation": "sum", "sort": "none", "limit": null },
+                { "id": "chart-3", "title": format!("{numeric}占比"), "description": "查看各维度占比", "type": "donut", "categoryField": dimension, "valueFields": [numeric], "aggregation": "sum", "sort": "desc", "limit": 12 }
+            ]
+        })
+    } else {
+        json!({
+            "version": 1,
+            "reportTitle": "分类统计报告",
+            "reportSubtitle": "基于导入数据的记录数统计",
+            "kpis": [{ "id": "kpi-1", "label": "数据记录", "field": "*", "aggregation": "count", "format": "number" }],
+            "charts": [
+                { "id": "chart-1", "title": format!("按{dimension}统计记录数"), "description": "查看各分类的记录数量", "type": "bar", "categoryField": dimension, "valueFields": [dimension], "aggregation": "count", "sort": "desc", "limit": 20 },
+                { "id": "chart-2", "title": format!("{dimension}记录数占比"), "description": "查看各分类的记录数量占比", "type": "donut", "categoryField": dimension, "valueFields": [dimension], "aggregation": "count", "sort": "desc", "limit": 12 },
+                { "id": "chart-3", "title": format!("{dimension}记录数对比"), "description": "横向比较各分类的记录数量", "type": "horizontal-bar", "categoryField": dimension, "valueFields": [dimension], "aggregation": "count", "sort": "desc", "limit": 20 }
+            ]
+        })
+    };
+    serde_json::to_string_pretty(&example).map_err(|_| "ai_profile_invalid".to_owned())
 }
 
 fn validation_correction(reason: &str) -> Option<&'static str> {
@@ -214,7 +296,9 @@ fn validation_correction(reason: &str) -> Option<&'static str> {
         "report_unknown_field" => Some("引用了 DataProfile 中不存在的字段名。"),
         "report_non_numeric_kpi" => Some("非 count 的 KPI 引用了非数值字段。"),
         "report_scatter_axis_invalid" => Some("散点图的横轴必须是数值字段。"),
-        "report_non_numeric_series" => Some("图表 valueFields 引用了不存在或非数值字段。"),
+        "report_non_numeric_series" => {
+            Some("图表 valueFields 引用了不存在的字段，或在非 count 聚合中使用了非数值字段。")
+        }
         _ => None,
     }
 }
@@ -250,6 +334,21 @@ mod tests {
         assert_eq!(example["kpis"][0]["format"], "currency");
         assert_eq!(example["charts"].as_array().unwrap().len(), 3);
         assert_eq!(example["charts"][0]["categoryField"], "部门");
+    }
+
+    #[test]
+    fn report_example_supports_categorical_counts_without_numeric_fields() {
+        let profile = json!({
+            "columns": [
+                { "name": "状态", "type": "category", "sensitive": false },
+                { "name": "接收人", "type": "text", "sensitive": false }
+            ]
+        });
+        let example: serde_json::Value =
+            serde_json::from_str(&report_spec_example(&profile).unwrap()).unwrap();
+        assert_eq!(example["kpis"][0]["field"], "*");
+        assert_eq!(example["charts"][0]["aggregation"], "count");
+        assert_eq!(example["charts"][0]["valueFields"][0], "状态");
     }
 
     #[test]

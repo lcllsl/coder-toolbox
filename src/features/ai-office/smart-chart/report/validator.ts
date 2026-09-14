@@ -40,7 +40,8 @@ export function validateReportSpec(input: unknown, profile: DataProfile): Valida
     const category = fields.get(chart.categoryField)
     if (!category) return { success: false, reason: 'report_unknown_field' }
     if (chart.type === 'scatter' && !NUMERIC_COLUMN_KINDS.has(category.type)) return { success: false, reason: 'report_scatter_axis_invalid' }
-    if (chart.valueFields.some((field) => !fields.has(field) || !NUMERIC_COLUMN_KINDS.has(fields.get(field)!.type))) {
+    if (chart.valueFields.some((field) => !fields.has(field)
+      || (chart.aggregation !== 'count' && !NUMERIC_COLUMN_KINDS.has(fields.get(field)!.type)))) {
       return { success: false, reason: 'report_non_numeric_series' }
     }
   }

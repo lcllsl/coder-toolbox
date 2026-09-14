@@ -228,14 +228,15 @@ async function runHealthTick() {
   const now = new Date()
   const resumedAfterSleep = now.getTime() - lastHealthTickAt > 30_000
   lastHealthTickAt = now.getTime()
+  await completeExpiredReminders(now)
   await healthStore.tick(now, resumedAfterSleep)
   schedulePendingReminderCompletion()
   if (healthStore.cardVisible) await openReminderCard()
 }
 
-async function completeExpiredReminders() {
+async function completeExpiredReminders(now = new Date()) {
   clearReminderCardTimer()
-  const expired = await healthStore.completeExpired(new Date())
+  const expired = await healthStore.completeExpired(now)
   if (expired.length && healthStore.cardVisible) await openReminderCard()
   else if (expired.length && orbStore.uiState === 'reminder') await closeReminderWindow()
   schedulePendingReminderCompletion()
@@ -511,6 +512,7 @@ onUnmounted(() => {
           :countdown-seconds="reminderCountdownSeconds"
           @complete="completeReminder"
           @snooze="snoozeReminder"
+          @expired="completeExpiredReminders()"
         />
       </div>
     </Transition>

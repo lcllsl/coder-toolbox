@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useHealthStore } from '@/app/stores/health'
@@ -16,8 +17,16 @@ import {
   REMINDER_AUTO_COMPLETE_SECONDS,
 } from '@/features/health/core/reminder-timing'
 import { createDefaultHealthSettings, loadHealthSettings } from '@/features/health/repositories/health-settings-repository'
+import ReminderCard from '@/features/health/components/ReminderCard.vue'
 
 describe('health reminder scheduler', () => {
+  it('uses the visible countdown animation as an automatic-completion fallback', async () => {
+    const reminder = createDefaultReminders(new Date('2026-07-21T08:00:00Z'))[0]
+    const wrapper = mount(ReminderCard, { props: { reminder, pendingCount: 1, countdownSeconds: 30 } })
+    await wrapper.find('.countdown-progress').trigger('animationend')
+    expect(wrapper.emitted('expired')).toHaveLength(1)
+  })
+
   it('uses a thirty-second automatic completion window', () => {
     expect(REMINDER_AUTO_COMPLETE_SECONDS).toBe(30)
     expect(REMINDER_AUTO_COMPLETE_MS).toBe(30_000)

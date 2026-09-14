@@ -6,7 +6,7 @@ import { createDataProfile } from '@/features/ai-office/smart-chart/excel/profil
 import { createDataset, parseWorkbookData, renameDatasetColumn } from '@/features/ai-office/smart-chart/excel/parser'
 import { detectHeaderRow } from '@/features/ai-office/smart-chart/excel/headerDetector'
 import { inferColumnKind } from '@/features/ai-office/smart-chart/excel/typeInference'
-import { createLocalReportSpec } from '@/features/ai-office/smart-chart/recommendation/localRecommender'
+import { createLocalReportSpec, hasChartableColumns } from '@/features/ai-office/smart-chart/recommendation/localRecommender'
 import { deleteSavedChartProject, getSavedChartProject, listSavedChartProjects, normalizeSavedChartTitle, renameSavedChartProject, saveChartProject } from '@/features/ai-office/smart-chart/repositories/saved-chart-repository'
 import { buildReport } from '@/features/ai-office/smart-chart/report/dataProcessor'
 import { exportReportHtml } from '@/features/ai-office/smart-chart/report/htmlExporter'
@@ -28,6 +28,22 @@ function salesDataset(): TabularDataset {
       { 月份: '2026-02-01', 部门: '华东', 销售额: 180, 利润率: .25, 手机号: '13900139000' },
       { 月份: '2026-01-01', 部门: '华南', 销售额: 90, 利润率: .18, 手机号: '13700137000' },
       { 月份: '2026-02-01', 部门: '华南', 销售额: 110, 利润率: .22, 手机号: '13600136000' },
+    ],
+  }
+}
+
+function transferDataset(): TabularDataset {
+  return {
+    fileName: '移库单.xlsx', sheetName: '移库单', headerRow: 1,
+    columns: [
+      { key: '类型', label: '类型', sourceIndex: 0, kind: 'category', inferredKind: 'category', confidence: .95, sensitive: false },
+      { key: '状态', label: '状态', sourceIndex: 1, kind: 'category', inferredKind: 'category', confidence: .95, sensitive: false },
+      { key: '接收人', label: '接收人', sourceIndex: 2, kind: 'text', inferredKind: 'text', confidence: .9, sensitive: false },
+    ],
+    rows: [
+      { 类型: '资产设备及低耗', 状态: '已入库', 接收人: '黄翠丽' },
+      { 类型: '资产设备及低耗', 状态: '已提交', 接收人: '孙天军' },
+      { 类型: '物料', 状态: '已入库', 接收人: '黄翠丽' },
     ],
   }
 }
@@ -96,6 +112,21 @@ describe('smart chart spreadsheet pipeline', () => {
       charts: local.charts.map((chart, index) => index === 0 ? { ...chart, valueFields: ['不存在'] } : chart),
     }, profile)).toEqual({ success: false, reason: 'report_non_numeric_series' })
     expect(reportValidationMessage('report_non_numeric_series')).toContain('无效字段')
+  })
+
+  it('creates record-count charts when a sheet has no numeric fields', () => {
+    const dataset = transferDataset()
+    const profile = createDataProfile(dataset)
+    const spec = createLocalReportSpec(profile)
+    const validation = validateReportSpec(spec, profile)
+    const report = buildReport(dataset, spec)
+
+    expect(spec.charts).toHaveLength(3)
+    expect(spec.charts.every((chart) => chart.aggregation === 'count')).toBe(true)
+    expect(hasChartableColumns(profile)).toBe(true)
+    expect(validation.success).toBe(true)
+    expect(report.charts[0].series[0].name).toBe('记录数')
+    expect(report.charts[0].series[0].values).toEqual([2, 1])
   })
 
   it('aggregates KPIs and category series locally', () => {

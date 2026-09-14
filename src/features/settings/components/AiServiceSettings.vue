@@ -81,7 +81,7 @@ onMounted(async () => {
     <label class="field"><span>模型</span><select :value="settings.settings.aiModel" @change="changeModel(($event.target as HTMLSelectElement).value)"><option value="deepseek-v4-flash">DeepSeek V4 Flash（推荐）</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select><small>智能图表使用非思考模式和 JSON 输出，优先保证响应速度与结构稳定。</small></label>
     <div class="actions"><button type="button" class="primary" :disabled="busy || !apiKey.trim()" @click="saveKey"><LoaderCircle v-if="busy" class="spin" :size="16" /><KeyRound v-else :size="16" />保存 Key</button><button type="button" :disabled="testing || !hasApiKey" @click="testConnection"><LoaderCircle v-if="testing" class="spin" :size="16" /><CheckCircle2 v-else :size="16" />测试连接</button><button v-if="hasApiKey" type="button" class="danger" :disabled="busy" @click="removeKey"><Trash2 :size="16" />移除</button></div>
     <p v-if="connectionState !== 'idle'" class="connection-result" :class="connectionState" role="status">{{ connectionMessage }}</p>
-    <div class="privacy-note"><ShieldCheck :size="20" /><div><strong>AI 数据处理说明</strong><p>只发送字段名、推断类型、基础统计和最多 12 行脱敏样例。疑似身份证、手机号、银行卡、邮箱、密码或 Token 的样例值会替换为 [REDACTED]。</p></div></div>
+    <div class="privacy-note"><ShieldCheck :size="20" /><div><strong>AI 数据处理说明</strong><p>智能图表只发送脱敏后的字段概况和少量样例。智能表格会发送你主动提交的文本；默认先在本机把手机号、邮箱、身份证、银行卡、密码或 Token 替换为匿名占位符。冒泡不会后台自动上传剪贴板内容。</p></div></div>
   </section>
 </template>
 

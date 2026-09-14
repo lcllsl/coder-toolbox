@@ -12,6 +12,7 @@ use crate::ai::{client, config, DEEPSEEK_MODELS};
 
 const MAX_SPREADSHEET_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_REPORT_BYTES: usize = 24 * 1024 * 1024;
+const MAX_SMART_TABLE_EXPORT_BYTES: usize = 24 * 1024 * 1024;
 const PANEL_WINDOW: &str = "panel-window";
 const AI_SERVICE_FILE: &str = "ai-service.json";
 
@@ -59,6 +60,24 @@ fn validated_html_path(path: &str) -> Result<PathBuf, String> {
     }
     if target.file_name().is_none() || target.parent().is_none_or(|parent| !parent.is_dir()) {
         return Err("report_directory_missing".to_owned());
+    }
+    Ok(target)
+}
+
+fn validated_smart_table_path(path: &str, format: &str) -> Result<PathBuf, String> {
+    if !matches!(format, "xlsx" | "csv") {
+        return Err("smart_table_export_format_invalid".to_owned());
+    }
+    let target = PathBuf::from(path);
+    if target
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_none_or(|extension| !extension.eq_ignore_ascii_case(format))
+    {
+        return Err("smart_table_export_path_invalid".to_owned());
+    }
+    if target.file_name().is_none() || target.parent().is_none_or(|parent| !parent.is_dir()) {
+        return Err("smart_table_export_directory_missing".to_owned());
     }
     Ok(target)
 }
@@ -174,6 +193,72 @@ pub async fn ai_generate_chart_plan(
 }
 
 #[tauri::command]
+pub async fn ai_detect_table_schema(
+    window: WebviewWindow,
+    model: String,
+    source_sample: String,
+    target_description: String,
+    template_name: String,
+    validation_reason: Option<String>,
+) -> Result<Value, String> {
+    ensure_panel_window(&window)?;
+    let api_key = load_api_key(&window)?;
+    client::detect_table_schema(
+        &api_key,
+        &model,
+        &source_sample,
+        &target_description,
+        &template_name,
+        validation_reason.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn ai_extract_table_rows(
+    window: WebviewWindow,
+    model: String,
+    schema: Value,
+    source_blocks: Value,
+    validation_reason: Option<String>,
+) -> Result<Value, String> {
+    ensure_panel_window(&window)?;
+    let api_key = load_api_key(&window)?;
+    client::extract_table_rows(
+        &api_key,
+        &model,
+        &schema,
+        &source_blocks,
+        validation_reason.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn write_smart_table_export(
+    window: WebviewWindow,
+    path: String,
+    format: String,
+    base64: String,
+) -> Result<String, String> {
+    ensure_panel_window(&window)?;
+    let target = validated_smart_table_path(&path, &format)?;
+    let bytes = STANDARD
+        .decode(base64)
+        .map_err(|_| "smart_table_export_content_invalid".to_owned())?;
+    if bytes.is_empty() || bytes.len() > MAX_SMART_TABLE_EXPORT_BYTES {
+        return Err("smart_table_export_content_invalid".to_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        std::fs::write(&target, bytes)
+            .map(|_| target.to_string_lossy().into_owned())
+            .map_err(|_| "smart_table_export_write_failed".to_owned())
+    })
+    .await
+    .map_err(|_| "smart_table_export_write_failed".to_owned())?
+}
+
+#[tauri::command]
 pub async fn read_spreadsheet_file(
     window: WebviewWindow,
     path: String,
@@ -246,7 +331,7 @@ pub fn open_report_html(window: WebviewWindow, path: String, reveal: bool) -> Re
 
 #[cfg(test)]
 mod tests {
-    use super::{is_supported_spreadsheet, validated_html_path};
+    use super::{is_supported_spreadsheet, validated_html_path, validated_smart_table_path};
     use std::path::Path;
 
     #[test]
@@ -264,5 +349,23 @@ mod tests {
 
         assert!(validated_html_path(&html_path.to_string_lossy()).is_ok());
         assert!(validated_html_path(&script_path.to_string_lossy()).is_err());
+    }
+
+    #[test]
+    fn smart_table_export_path_matches_requested_format() {
+        let temp_dir = std::env::temp_dir();
+        assert!(validated_smart_table_path(
+            &temp_dir.join("result.xlsx").to_string_lossy(),
+            "xlsx"
+        )
+        .is_ok());
+        assert!(
+            validated_smart_table_path(&temp_dir.join("result.csv").to_string_lossy(), "xlsx")
+                .is_err()
+        );
+        assert!(
+            validated_smart_table_path(&temp_dir.join("result.exe").to_string_lossy(), "exe")
+                .is_err()
+        );
     }
 }

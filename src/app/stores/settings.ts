@@ -69,6 +69,10 @@ export const useSettingsStore = defineStore('settings', {
       this.settings.aiPrivacyNoticeDismissed = true
       await this.persist()
     },
+    async dismissSmartTablePrivacyNotice() {
+      this.settings.smartTablePrivacyNoticeDismissed = true
+      await this.persist()
+    },
     async setAutostart(enabled: boolean) {
       await setAutostart(enabled)
       this.settings.autostart = enabled

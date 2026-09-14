@@ -13,4 +13,5 @@ export interface AppSettings {
   vaultAutoLockMinutes: VaultAutoLockMinutes
   aiModel: AiModel
   aiPrivacyNoticeDismissed: boolean
+  smartTablePrivacyNoticeDismissed: boolean
 }

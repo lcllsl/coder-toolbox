@@ -17,6 +17,7 @@ const countdownStyle = computed(() => ({
 const emit = defineEmits<{
   complete: []
   snooze: []
+  expired: []
 }>()
 </script>
 
@@ -24,7 +25,7 @@ const emit = defineEmits<{
   <aside class="reminder-card" role="alert" :aria-label="`${reminder.title}提醒`" :style="countdownStyle">
     <svg class="reminder-countdown-ring" viewBox="0 0 238 126" preserveAspectRatio="none" aria-hidden="true">
       <rect class="countdown-track" x="1.5" y="1.5" width="235" height="123" rx="17" pathLength="100" />
-      <rect class="countdown-progress" x="1.5" y="1.5" width="235" height="123" rx="17" pathLength="100" />
+      <rect class="countdown-progress" x="1.5" y="1.5" width="235" height="123" rx="17" pathLength="100" @animationend="emit('expired')" />
     </svg>
     <span class="sr-only">{{ countdownSeconds }} 秒内无操作将自动完成</span>
     <div class="reminder-card-heading">

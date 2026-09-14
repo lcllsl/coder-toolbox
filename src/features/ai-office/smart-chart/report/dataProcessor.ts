@@ -28,13 +28,15 @@ function processKpis(spec: ReportSpec, rows: DataRow[]): KpiResult[] {
   return spec.kpis.map((kpi) => {
     const value = kpi.field === '*'
       ? rows.length
-      : aggregate(rows.map((row) => finiteNumber(row[kpi.field])).filter((item): item is number => item !== null), kpi.aggregation)
+      : kpi.aggregation === 'count'
+        ? rows.filter((row) => row[kpi.field] !== null && row[kpi.field] !== undefined && row[kpi.field] !== '').length
+        : aggregate(rows.map((row) => finiteNumber(row[kpi.field])).filter((item): item is number => item !== null), kpi.aggregation)
     return { ...kpi, value, displayValue: formatMetric(value, kpi.format) }
   })
 }
 
-function categoryLabel(value: unknown, index: number): string {
-  if (value === null || value === undefined || value === '') return `未填写 ${index + 1}`
+function categoryLabel(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '未填写'
   if (typeof value === 'boolean') return value ? '是' : '否'
   return String(value)
 }
@@ -51,8 +53,8 @@ function processScatter(spec: ProcessedChart['spec'], rows: DataRow[]): Processe
 
 function processGroupedChart(spec: ProcessedChart['spec'], rows: DataRow[]): ProcessedChart {
   const groups = new Map<string, Map<string, number[]>>()
-  rows.forEach((row, index) => {
-    const category = categoryLabel(row[spec.categoryField], index)
+  rows.forEach((row) => {
+    const category = categoryLabel(row[spec.categoryField])
     const group = groups.get(category) ?? new Map<string, number[]>()
     for (const field of spec.valueFields) {
       const value = finiteNumber(row[field])
@@ -75,7 +77,10 @@ function processGroupedChart(spec: ProcessedChart['spec'], rows: DataRow[]): Pro
   return {
     spec,
     categories: entries.map((entry) => entry.category),
-    series: spec.valueFields.map((field) => ({ name: field, values: entries.map((entry) => entry.values[field]) })),
+    series: spec.valueFields.map((field) => ({
+      name: spec.aggregation === 'count' ? (spec.valueFields.length === 1 ? '记录数' : `${field}记录数`) : field,
+      values: entries.map((entry) => entry.values[field]),
+    })),
   }
 }
 
