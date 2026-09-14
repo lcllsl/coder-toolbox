@@ -38,9 +38,9 @@ export async function testAiConnection(model: string): Promise<void> {
   await invoke('ai_test_connection', { model })
 }
 
-export async function generateAiChartPlan(model: string, profile: DataProfile): Promise<unknown> {
+export async function generateAiChartPlan(model: string, profile: DataProfile, validationReason?: string): Promise<unknown> {
   if (!isTauriRuntime()) throw new Error('ai_api_key_missing')
-  return invoke<unknown>('ai_generate_chart_plan', { model, profile })
+  return invoke<unknown>('ai_generate_chart_plan', { model, profile, validationReason })
 }
 
 export async function readNativeSpreadsheet(path: string): Promise<NativeSpreadsheetFile> {
@@ -78,7 +78,9 @@ export function aiErrorMessage(error: unknown): string {
     ai_network_unavailable: '无法连接 AI 服务，请检查网络',
     ai_rate_limited: '请求较多，请稍后重试',
     ai_balance_insufficient: 'DeepSeek 账户余额不足',
-    ai_secure_storage_unavailable: '系统安全存储暂不可用',
+    ai_local_storage_unavailable: '本机应用数据目录不可用',
+    ai_local_storage_read_failed: '无法读取本机 API Key',
+    ai_local_storage_write_failed: '无法保存本机 API Key',
     ai_native_runtime_required: '请在冒泡桌面应用中测试连接',
   }
   return Object.entries(messages).find(([key]) => code.includes(key))?.[1] ?? 'AI 服务暂时不可用'

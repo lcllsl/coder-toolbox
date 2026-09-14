@@ -325,4 +325,6 @@
 - 2026-09-14 用户指南 PDF 已按最新 Markdown 和 10 张当前截图重新导出并覆盖旧文件，并在移除旧默认提醒后再次同步。新版为 15 页 A4，已逐页渲染检查封面、中文字体、四项默认提醒表格、截图、页眉页码和分页；同时以 PDF 文本与图片结构复核关键新增说明完整、无空白页。
 - 2026-09-14 默认提醒精简：从新用户默认配置、既有配置迁移、调度优先级和界面图标映射中移除“提肛训练”。升级时按旧默认稳定 ID 自动清除该项目，不删除既有提醒完成日志；用户仍可通过“新增提醒”创建自己的训练项目。
 - 2026-09-14 Windows CI 修正：GitHub Actions #6/#7 均在 Rust 测试步骤失败，原因是报告路径单测硬编码 Unix `/tmp`；改用 `std::env::temp_dir()` 后可按 runner 平台选择真实临时目录。本地 macOS Rust 32/32 通过，Windows 结果待新一轮线上 runner 验证。
-- 待验证：尚未使用用户真实 DeepSeek API Key 发起连接和规划请求；Windows 11 Credential Manager、WebView2、原生拖放、离线 HTML 与安装包仍需实机验证。浏览器 E2E 不替代 Tauri IPC 或系统安全存储验收。
+- 2026-09-14 AI 凭据交互调整：按新需求移除 macOS Keychain / Windows Credential Manager 依赖，DeepSeek API Key 改由 Rust 层保存在独立本机应用数据文件 `ai-service.json`。状态、测试连接和生成规划均读取该文件，不再调用系统凭据 API，因此不会出现钥匙串授权弹窗。旧钥匙串 Key 不自动读取或迁移，升级后需在 AI 服务设置中重新保存一次。已验证 `pnpm typecheck`、Vitest 95/95、`pnpm build`、Playwright 24/24、Rust fmt、Rust 34/34 单测及 Clippy `-D warnings` 全部通过；真实 Key 请求、安装包和用户指南 PDF 同步仍待验证。
+- 2026-09-14 AI 规划校验修正：确认 DeepSeek `json_object` 只保证语法为 JSON，原提示词未给出 KPI/图表的完整嵌套字段和示例，导致合法 JSON 仍可能无法通过 `ReportSpec` 校验。现在请求内嵌完整合同和基于当前 `DataProfile` 真实字段名的三图表示例；首次校验失败时使用白名单错误码自动纠正重试一次，再失败时向用户显示结构、重复 ID、未知字段或非数值字段等具体原因，不记录模型原始响应或数据样例。已验证 `pnpm typecheck`、Vitest 95/95、`pnpm build`、Rust fmt、Rust 36/36 单测和 Clippy `-D warnings` 通过；真实 DeepSeek 纠正重试链路待实机验证。
+- 待验证：尚未使用用户真实 DeepSeek API Key 发起连接和规划请求；Windows 11 WebView2、原生拖放、本机 API Key 文件读写、离线 HTML 与安装包仍需实机验证。浏览器 E2E 不替代 Tauri IPC 或应用数据文件验收。

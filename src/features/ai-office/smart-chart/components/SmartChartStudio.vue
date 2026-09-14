@@ -10,7 +10,7 @@ import { createLocalReportSpec } from '../recommendation/localRecommender'
 import { deleteSavedChartProject, getSavedChartProject, listSavedChartProjects, renameSavedChartProject, saveChartProject } from '../repositories/saved-chart-repository'
 import { buildReport } from '../report/dataProcessor'
 import { createReportFileName, exportReportHtml } from '../report/htmlExporter'
-import { validateReportSpec } from '../report/validator'
+import { reportValidationMessage, validateReportSpec } from '../report/validator'
 import { COLUMN_KIND_LABELS, NUMERIC_COLUMN_KINDS, type ChartSpec, type ChartType, type ColumnKind, type KpiSpec, type ParsedWorkbook, type ReportSpec, type SavedChartSummary, type TabularDataset } from '../types'
 import { aiErrorMessage, generateAiChartPlan, getAiStatus, openReportHtml, readNativeSpreadsheet, saveReportHtml } from '@/services/tauri/ai'
 import { onFileSystemDrop } from '@/services/tauri/files'
@@ -213,9 +213,14 @@ async function generateReport() {
   let spec = createLocalReportSpec(profile)
   if (hasApiKey.value) {
     try {
-      const result = validateReportSpec(await generateAiChartPlan(settings.settings.aiModel, profile), profile)
+      let result = validateReportSpec(await generateAiChartPlan(settings.settings.aiModel, profile), profile)
+      if (!result.success) {
+        const firstReason = result.reason
+        result = validateReportSpec(await generateAiChartPlan(settings.settings.aiModel, profile, firstReason), profile)
+        if (result.success) generationNotice.value = 'AI 首次规划未通过校验，已自动修正。'
+      }
       if (result.success && result.report) spec = result.report
-      else generationNotice.value = 'AI 返回的规划未通过本地校验，已使用本地方案。'
+      else generationNotice.value = `${reportValidationMessage(result.reason)}，已使用本地方案。`
     } catch (error) {
       generationNotice.value = `${aiErrorMessage(error)}，已根据数据结构自动生成图表。`
     }

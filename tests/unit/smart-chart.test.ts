@@ -10,7 +10,7 @@ import { createLocalReportSpec } from '@/features/ai-office/smart-chart/recommen
 import { deleteSavedChartProject, getSavedChartProject, listSavedChartProjects, normalizeSavedChartTitle, renameSavedChartProject, saveChartProject } from '@/features/ai-office/smart-chart/repositories/saved-chart-repository'
 import { buildReport } from '@/features/ai-office/smart-chart/report/dataProcessor'
 import { exportReportHtml } from '@/features/ai-office/smart-chart/report/htmlExporter'
-import { validateReportSpec } from '@/features/ai-office/smart-chart/report/validator'
+import { reportValidationMessage, validateReportSpec } from '@/features/ai-office/smart-chart/report/validator'
 import type { ReportSpec, TabularDataset } from '@/features/ai-office/smart-chart/types'
 
 function salesDataset(): TabularDataset {
@@ -95,6 +95,7 @@ describe('smart chart spreadsheet pipeline', () => {
       ...local,
       charts: local.charts.map((chart, index) => index === 0 ? { ...chart, valueFields: ['不存在'] } : chart),
     }, profile)).toEqual({ success: false, reason: 'report_non_numeric_series' })
+    expect(reportValidationMessage('report_non_numeric_series')).toContain('无效字段')
   })
 
   it('aggregates KPIs and category series locally', () => {

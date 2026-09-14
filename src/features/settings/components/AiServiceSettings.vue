@@ -16,7 +16,7 @@ const busy = ref(false)
 const testing = ref(false)
 const connectionState = ref<'idle' | 'success' | 'error'>('idle')
 const connectionMessage = ref('')
-const keyPlaceholder = computed(() => hasApiKey.value ? '已安全保存，输入新 Key 可替换' : '输入 DeepSeek API Key')
+const keyPlaceholder = computed(() => hasApiKey.value ? '已保存在本机，输入新 Key 可替换' : '输入 DeepSeek API Key')
 
 async function refreshStatus() {
   try { hasApiKey.value = (await getAiStatus()).hasApiKey }
@@ -32,7 +32,7 @@ async function saveKey() {
     apiKey.value = ''
     hasApiKey.value = true
     connectionState.value = 'idle'
-    feedback.notify('API Key 已保存到系统安全存储', 'success')
+    feedback.notify('API Key 已保存到本机应用数据', 'success')
   } catch (error) { feedback.notify(aiErrorMessage(error), 'warning') }
   finally { busy.value = false }
 }
@@ -57,7 +57,7 @@ async function removeKey() {
     hasApiKey.value = false
     apiKey.value = ''
     connectionState.value = 'idle'
-    feedback.notify('API Key 已从系统安全存储移除', 'success')
+    feedback.notify('API Key 已从本机应用数据移除', 'success')
   } catch (error) { feedback.notify(aiErrorMessage(error), 'warning') }
   finally { busy.value = false }
 }
@@ -77,7 +77,7 @@ onMounted(async () => {
   <section class="ai-service-settings">
     <header><h2>DeepSeek 服务</h2><p>智能图表只发送脱敏后的字段概况与少量样例，Excel 文件本身不会上传。</p></header>
     <div class="provider-card"><span><KeyRound :size="21" /></span><div><strong>DeepSeek</strong><small>{{ hasApiKey ? 'API Key 已配置' : '尚未配置 API Key' }}</small></div><em :class="{ ready: hasApiKey }">{{ hasApiKey ? '已配置' : '待配置' }}</em></div>
-    <label class="field"><span>API Key</span><div class="key-input"><input v-model="apiKey" :type="revealKey ? 'text' : 'password'" :placeholder="keyPlaceholder" autocomplete="off" spellcheck="false" /><button type="button" :aria-label="revealKey ? '隐藏 API Key' : '显示 API Key'" @click="revealKey = !revealKey"><EyeOff v-if="revealKey" :size="17" /><Eye v-else :size="17" /></button></div><small>密钥仅写入 macOS Keychain 或 Windows Credential Manager，不进入普通设置、数据库或日志。</small></label>
+    <label class="field"><span>API Key</span><div class="key-input"><input v-model="apiKey" :type="revealKey ? 'text' : 'password'" :placeholder="keyPlaceholder" autocomplete="off" spellcheck="false" /><button type="button" :aria-label="revealKey ? '隐藏 API Key' : '显示 API Key'" @click="revealKey = !revealKey"><EyeOff v-if="revealKey" :size="17" /><Eye v-else :size="17" /></button></div><small>密钥保存在本机应用数据中，不写入数据库、导出报告或日志；调用 AI 时不再触发系统钥匙串授权。</small></label>
     <label class="field"><span>模型</span><select :value="settings.settings.aiModel" @change="changeModel(($event.target as HTMLSelectElement).value)"><option value="deepseek-v4-flash">DeepSeek V4 Flash（推荐）</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option></select><small>智能图表使用非思考模式和 JSON 输出，优先保证响应速度与结构稳定。</small></label>
     <div class="actions"><button type="button" class="primary" :disabled="busy || !apiKey.trim()" @click="saveKey"><LoaderCircle v-if="busy" class="spin" :size="16" /><KeyRound v-else :size="16" />保存 Key</button><button type="button" :disabled="testing || !hasApiKey" @click="testConnection"><LoaderCircle v-if="testing" class="spin" :size="16" /><CheckCircle2 v-else :size="16" />测试连接</button><button v-if="hasApiKey" type="button" class="danger" :disabled="busy" @click="removeKey"><Trash2 :size="16" />移除</button></div>
     <p v-if="connectionState !== 'idle'" class="connection-result" :class="connectionState" role="status">{{ connectionMessage }}</p>

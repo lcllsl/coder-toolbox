@@ -1,18 +1,25 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io::ErrorKind,
+    path::{Path, PathBuf},
+};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Manager, WebviewWindow};
-use tauri_plugin_store::StoreExt;
 
 use crate::ai::{client, config, DEEPSEEK_MODELS};
 
 const MAX_SPREADSHEET_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_REPORT_BYTES: usize = 24 * 1024 * 1024;
 const PANEL_WINDOW: &str = "panel-window";
-const AI_CREDENTIAL_STATE_STORE: &str = "ai-credential-state.json";
-const AI_CREDENTIAL_CONFIGURED: &str = "aiCredentialConfigured";
+const AI_SERVICE_FILE: &str = "ai-service.json";
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiServiceData {
+    deepseek_api_key: String,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,24 +70,66 @@ fn ensure_panel_window(window: &WebviewWindow) -> Result<(), String> {
 }
 
 fn credential_configured(window: &WebviewWindow) -> bool {
-    window
-        .app_handle()
-        .store(AI_CREDENTIAL_STATE_STORE)
-        .ok()
-        .and_then(|store| store.get(AI_CREDENTIAL_CONFIGURED))
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
+    load_api_key(window).is_ok()
 }
 
-fn set_credential_configured(window: &WebviewWindow, configured: bool) -> Result<(), String> {
-    let store = window
+fn ai_service_path(window: &WebviewWindow) -> Result<PathBuf, String> {
+    window
         .app_handle()
-        .store(AI_CREDENTIAL_STATE_STORE)
-        .map_err(|_| "ai_secure_storage_write_failed".to_owned())?;
-    store.set(AI_CREDENTIAL_CONFIGURED, configured);
-    store
-        .save()
-        .map_err(|_| "ai_secure_storage_write_failed".to_owned())
+        .path()
+        .app_data_dir()
+        .map(|directory| directory.join(AI_SERVICE_FILE))
+        .map_err(|_| "ai_local_storage_unavailable".to_owned())
+}
+
+fn load_api_key(window: &WebviewWindow) -> Result<zeroize::Zeroizing<String>, String> {
+    let path = ai_service_path(window)?;
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return Err("ai_api_key_missing".to_owned())
+        }
+        Err(_) => return Err("ai_local_storage_read_failed".to_owned()),
+    };
+    let data: AiServiceData =
+        serde_json::from_str(&content).map_err(|_| "ai_local_storage_read_failed".to_owned())?;
+    config::stored_api_key(Some(&data.deepseek_api_key))
+}
+
+fn save_api_key(window: &WebviewWindow, api_key: String) -> Result<(), String> {
+    let api_key = config::normalize_api_key(api_key)?;
+    let path = ai_service_path(window)?;
+    let directory = path
+        .parent()
+        .ok_or_else(|| "ai_local_storage_write_failed".to_owned())?;
+    std::fs::create_dir_all(directory).map_err(|_| "ai_local_storage_write_failed".to_owned())?;
+    let content = serde_json::to_vec(&AiServiceData {
+        deepseek_api_key: api_key.to_string(),
+    })
+    .map_err(|_| "ai_local_storage_write_failed".to_owned())?;
+    std::fs::write(&path, content).map_err(|_| "ai_local_storage_write_failed".to_owned())?;
+    restrict_api_key_file_permissions(&path)
+}
+
+fn delete_api_key(window: &WebviewWindow) -> Result<(), String> {
+    match std::fs::remove_file(ai_service_path(window)?) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("ai_local_storage_write_failed".to_owned()),
+    }
+}
+
+#[cfg(unix)]
+fn restrict_api_key_file_permissions(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .map_err(|_| "ai_local_storage_write_failed".to_owned())
+}
+
+#[cfg(not(unix))]
+fn restrict_api_key_file_permissions(_path: &Path) -> Result<(), String> {
+    Ok(())
 }
 
 #[tauri::command]
@@ -96,27 +145,19 @@ pub async fn ai_status(window: WebviewWindow) -> Result<AiStatus, String> {
 #[tauri::command]
 pub async fn ai_save_api_key(window: WebviewWindow, api_key: String) -> Result<(), String> {
     ensure_panel_window(&window)?;
-    tauri::async_runtime::spawn_blocking(move || config::save_api_key(api_key))
-        .await
-        .map_err(|_| "ai_secure_storage_write_failed".to_owned())??;
-    set_credential_configured(&window, true)
+    save_api_key(&window, api_key)
 }
 
 #[tauri::command]
 pub async fn ai_delete_api_key(window: WebviewWindow) -> Result<(), String> {
     ensure_panel_window(&window)?;
-    tauri::async_runtime::spawn_blocking(config::delete_api_key)
-        .await
-        .map_err(|_| "ai_secure_storage_delete_failed".to_owned())??;
-    set_credential_configured(&window, false)
+    delete_api_key(&window)
 }
 
 #[tauri::command]
 pub async fn ai_test_connection(window: WebviewWindow, model: String) -> Result<(), String> {
     ensure_panel_window(&window)?;
-    let api_key = tauri::async_runtime::spawn_blocking(config::load_api_key)
-        .await
-        .map_err(|_| "ai_secure_storage_read_failed".to_owned())??;
+    let api_key = load_api_key(&window)?;
     client::test_connection(&api_key, &model).await
 }
 
@@ -125,12 +166,11 @@ pub async fn ai_generate_chart_plan(
     window: WebviewWindow,
     model: String,
     profile: Value,
+    validation_reason: Option<String>,
 ) -> Result<Value, String> {
     ensure_panel_window(&window)?;
-    let api_key = tauri::async_runtime::spawn_blocking(config::load_api_key)
-        .await
-        .map_err(|_| "ai_secure_storage_read_failed".to_owned())??;
-    client::generate_chart_plan(&api_key, &model, &profile).await
+    let api_key = load_api_key(&window)?;
+    client::generate_chart_plan(&api_key, &model, &profile, validation_reason.as_deref()).await
 }
 
 #[tauri::command]
