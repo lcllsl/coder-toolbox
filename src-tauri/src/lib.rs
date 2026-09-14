@@ -59,6 +59,12 @@ pub fn run() {
                             sql: include_str!("../migrations/0005_vault.sql"),
                             kind: MigrationKind::Up,
                         },
+                        Migration {
+                            version: 6,
+                            description: "create_smart_chart_projects",
+                            sql: include_str!("../migrations/0006_smart_chart_projects.sql"),
+                            kind: MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),

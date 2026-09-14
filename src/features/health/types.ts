@@ -1,4 +1,4 @@
-export const DEFAULT_REMINDER_IDS = ['stand', 'water', 'pelvic_floor', 'eye_rest', 'posture'] as const
+export const DEFAULT_REMINDER_IDS = ['stand', 'water', 'eye_rest', 'posture'] as const
 export type ReminderId = string
 export type ReminderAction = 'completed' | 'snoozed' | 'dismissed' | 'auto_hidden'
 
@@ -46,5 +46,4 @@ export const REMINDER_PRIORITY: readonly ReminderId[] = [
   'eye_rest',
   'water',
   'posture',
-  'pelvic_floor',
 ]

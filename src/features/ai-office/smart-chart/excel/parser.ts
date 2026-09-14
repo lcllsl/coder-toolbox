@@ -22,6 +22,14 @@ function toSpreadsheetCell(value: unknown): SpreadsheetCell {
   return String(value)
 }
 
+export function formatDateWithoutTimezone(value: Date): string {
+  if (Number.isNaN(value.getTime())) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+  const hasTime = value.getHours() !== 0 || value.getMinutes() !== 0 || value.getSeconds() !== 0
+  return hasTime ? `${date} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}` : date
+}
+
 export function parseWorkbookData(data: ArrayBuffer | string, fileName: string, sizeBytes: number, inputType: 'array' | 'base64' | 'string' = 'array'): ParsedWorkbook {
   validateSpreadsheetFile(fileName, sizeBytes)
   const workbook = XLSX.read(data, {
@@ -38,7 +46,12 @@ export function parseWorkbookData(data: ArrayBuffer | string, fileName: string, 
     const raw = worksheet
       ? XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: true, defval: null, blankrows: false })
       : []
-    const rawRows = raw.map((row) => row.map(toSpreadsheetCell))
+    const formatted = worksheet
+      ? XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: false, defval: null, blankrows: false })
+      : []
+    const rawRows = raw.map((row, rowIndex) => row.map((value, columnIndex) => value instanceof Date
+      ? toSpreadsheetCell(formatted[rowIndex]?.[columnIndex] ?? formatDateWithoutTimezone(value))
+      : toSpreadsheetCell(value)))
     const columnCount = rawRows.reduce((max, row) => Math.max(max, row.length), 0)
     return { name, rawRows, rowCount: rawRows.length, columnCount, detectedHeaderRow: detectHeaderRow(rawRows) }
   })
@@ -88,5 +101,25 @@ export function updateColumnKind(dataset: TabularDataset, columnKey: string, kin
   if (!sourceColumn) return dataset
   const columns = dataset.columns.map((column) => column.key === columnKey ? { ...column, kind } : column)
   const rows = dataset.rows.map((row) => ({ ...row, [columnKey]: normalizeCell(row[columnKey], kind) }))
+  return { ...dataset, columns, rows }
+}
+
+export function renameDatasetColumn(dataset: TabularDataset, columnKey: string, nextName: string): TabularDataset {
+  const normalized = nextName.trim()
+  if (!normalized) throw new Error('column_name_empty')
+  if (normalized.length > 80) throw new Error('column_name_too_long')
+  const sourceColumn = dataset.columns.find((column) => column.key === columnKey)
+  if (!sourceColumn || normalized === columnKey) return dataset
+  const normalizedKey = normalized.toLocaleLowerCase()
+  if (dataset.columns.some((column) => column.key !== columnKey && column.key.toLocaleLowerCase() === normalizedKey)) {
+    throw new Error('column_name_duplicate')
+  }
+  const columns = dataset.columns.map((column) => column.key === columnKey
+    ? { ...column, key: normalized, label: normalized }
+    : column)
+  const rows = dataset.rows.map((row) => Object.fromEntries(dataset.columns.map((column) => [
+    column.key === columnKey ? normalized : column.key,
+    row[column.key] ?? null,
+  ])))
   return { ...dataset, columns, rows }
 }

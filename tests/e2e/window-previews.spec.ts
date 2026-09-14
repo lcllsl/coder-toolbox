@@ -1,4 +1,18 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function expectUnifiedModal(page: Page) {
+  const backdrop = page.locator('.ui-modal-backdrop').last()
+  await expect(backdrop).toBeVisible()
+  const surface = backdrop.locator('.ui-modal-surface')
+  await expect(surface).toBeVisible()
+  await expect(surface).toHaveCSS('opacity', '1')
+  const style = await backdrop.evaluate((element) => {
+    const computed = getComputedStyle(element)
+    return { backgroundColor: computed.backgroundColor, backdropFilter: computed.backdropFilter, opacity: computed.opacity }
+  })
+  expect(style).toMatchObject({ backgroundColor: 'rgba(10, 14, 22, 0.4)', opacity: '1' })
+  expect(style.backdropFilter).toContain('blur(6px)')
+}
 
 test('orb preview exposes exactly five categories', async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 340 })
@@ -134,6 +148,8 @@ test('AI office turns a local spreadsheet into an interactive report', async ({ 
   await expect(page.getByText('Excel 智能图表', { exact: true })).toBeVisible()
   await expect(page.getByText('已上线', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: /Excel 智能图表/ }).click()
+  await expect(page.getByRole('heading', { name: '已保存的图表' })).toBeVisible()
+  await page.getByRole('button', { name: '新建图表', exact: true }).click()
   await page.locator('input[type=file]').setInputFiles({
     name: '演示销售数据.csv',
     mimeType: 'text/csv',
@@ -141,14 +157,43 @@ test('AI office turns a local spreadsheet into an interactive report', async ({ 
   })
   await expect(page.getByRole('heading', { name: '字段识别' })).toBeVisible()
   await expect(page.getByText('已识别 7 个字段')).toBeVisible()
+  await page.getByLabel('销售额字段名称').fill('营业收入')
+  await page.getByLabel('销售额字段名称').press('Tab')
+  await page.getByLabel('部门字段名称').fill('月份')
+  await page.getByLabel('部门字段名称').press('Tab')
+  await expect(page.getByRole('alert')).toHaveText('字段名称不能重复')
+  await expect(page.getByLabel('部门字段名称')).toHaveValue('部门')
   await page.getByRole('button', { name: '使用本地方案生成' }).click()
   await expect(page.getByText('尚未配置 AI 服务，已使用本地图表推荐。')).toBeVisible()
+  await expect(page.getByText('营业收入合计')).toBeVisible()
   await expect.poll(() => page.locator('.chart-card').count()).toBeGreaterThanOrEqual(3)
   await expect.poll(() => page.locator('canvas').count()).toBeGreaterThanOrEqual(3)
   await expect.poll(() => page.locator('.panel-view').evaluate((element) => getComputedStyle(element).opacity)).toBe('1')
+  await page.getByRole('button', { name: '删除统计卡片 营业收入合计' }).click()
+  await expect(page.locator('.kpi-grid').getByText('营业收入合计')).toHaveCount(0)
+  await page.getByRole('button', { name: /撤销删除“营业收入合计”/ }).click()
+  await expect(page.getByText('营业收入合计')).toBeVisible()
   await page.waitForTimeout(600)
   await expect(page.getByLabel('报告标题')).toBeVisible()
   await page.screenshot({ path: 'test-results/ai-office-preview.png' })
+  await page.getByRole('button', { name: '保存图表' }).click()
+  await expect(page.getByRole('heading', { name: '命名并保存图表' })).toBeVisible()
+  await expectUnifiedModal(page)
+  await page.screenshot({ path: 'test-results/modal-unified-preview.png' })
+  await page.getByLabel('图表名称').fill('演示销售看板')
+  await page.locator('.name-dialog').getByRole('button', { name: '保存图表' }).click()
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('petal-toolbox.smart-chart-projects'))).not.toBeNull()
+  await page.getByRole('button', { name: '返回图表列表' }).click()
+  await expect(page.getByRole('heading', { name: '已保存的图表' })).toBeVisible()
+  await expect(page.getByText('演示销售看板', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '重命名图表 演示销售看板' }).click()
+  await expect(page.getByRole('heading', { name: '重命名图表' })).toBeVisible()
+  await page.getByLabel('图表名称').fill('华东销售看板')
+  await page.getByRole('button', { name: '确认修改' }).click()
+  await expect(page.getByText('华东销售看板', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /华东销售看板.*演示销售数据/ }).click()
+  await expect(page.getByText(/已保存图表 · Sheet1 · 6 行数据/)).toBeVisible()
+  await expect(page.getByLabel('营业收入字段名称')).toBeVisible()
 })
 
 test('quick actions copy values and manage safe web links', async ({ page, context }) => {
@@ -211,6 +256,7 @@ test('vault preview covers initialization, CRUD, search, reveal, locking and per
 
   await page.getByRole('button', { name: '新增凭据' }).first().click()
   const dialog = page.getByRole('dialog', { name: '新增凭据' })
+  await expectUnifiedModal(page)
   await dialog.getByLabel('系统名称 *').fill('OA 管理后台')
   await dialog.getByLabel('用户名').fill('admin001')
   await dialog.getByLabel('密码 *').fill('fixed-vault-secret')
@@ -395,6 +441,7 @@ test('settings configure modes, shortcuts, double click and local data cleanup',
   await settingsNavigation.getByRole('button', { name: '数据与应用' }).click()
   await page.getByRole('button', { name: /清除数据并保留设置/ }).click()
   await expect(page.getByRole('alertdialog', { name: '清除全部本地数据？' })).toBeVisible()
+  await expectUnifiedModal(page)
   await page.getByRole('button', { name: '确认清除' }).click()
   await expect(page.getByText('本地数据已清除，设置已保留')).toBeVisible()
   await page.screenshot({ path: 'test-results/settings-stage8.png', omitBackground: true })
@@ -466,11 +513,11 @@ test('health panel manages reminder projects and common pause policies', async (
     window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'health' } }))
   })
 
-  await expect(page.locator('.reminder-row')).toHaveCount(5)
+  await expect(page.locator('.reminder-row')).toHaveCount(4)
   await expect(page.getByRole('checkbox', { name: '起立活动提醒' })).toBeChecked()
-  await expect(page.getByRole('checkbox', { name: '提肛训练提醒' })).not.toBeChecked()
+  await expect(page.getByText('提肛训练', { exact: true })).toHaveCount(0)
   await expect(page.locator('.reminder-field').first()).toBeVisible()
-  await expect(page.getByRole('button', { name: /立即调试.+提醒/ })).toHaveCount(5)
+  await expect(page.getByRole('button', { name: /立即调试.+提醒/ })).toHaveCount(4)
   await page.screenshot({ path: 'test-results/health-overview.png', omitBackground: true })
   await page.getByRole('button', { name: '新增提醒' }).click()
   await page.getByLabel('项目标题').fill('伸展肩颈')
@@ -478,21 +525,19 @@ test('health panel manages reminder projects and common pause policies', async (
   await page.getByLabel('新增提醒间隔时间').fill('25')
   await page.getByRole('button', { name: '新增项目' }).click()
   await expect(page.getByText('提醒项目已新增')).toBeVisible()
-  await expect(page.locator('.reminder-row')).toHaveCount(6)
+  await expect(page.locator('.reminder-row')).toHaveCount(5)
   await expect(page.getByRole('checkbox', { name: '伸展肩颈提醒' })).toBeChecked()
   await expect(page.getByLabel('伸展肩颈间隔时间')).toHaveValue('25')
   await page.getByRole('button', { name: '删除坐姿调整提醒' }).click()
   await expect(page.getByRole('alertdialog', { name: '删除提醒项目？' })).toBeVisible()
   await page.getByRole('button', { name: '删除', exact: true }).click()
-  await expect(page.locator('.reminder-row')).toHaveCount(5)
+  await expect(page.locator('.reminder-row')).toHaveCount(4)
   await expect(page.getByText('坐姿调整', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: 'test-results/health-stage5.png', omitBackground: true })
   await page.locator('html').evaluate((element) => { element.dataset.theme = 'dark' })
   await page.locator('.health-policies').scrollIntoViewIfNeeded()
   await expect(page.getByText('勿扰时间', { exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/health-dark-stage5.png', omitBackground: true })
-  await page.getByRole('checkbox', { name: '提肛训练提醒' }).check()
-  await expect(page.getByText('提醒设置已保存')).toBeVisible()
   await page.getByRole('button', { name: '暂停 30 分钟' }).click()
   await expect(page.getByText('提醒已暂停 30 分钟')).toBeVisible()
   await page.getByRole('button', { name: '立即调试起立活动提醒' }).click()
@@ -559,6 +604,7 @@ test('clipboard panel searches, copies, favorites and deletes a text card', asyn
   const clipboardBeforePreview = await page.evaluate(() => navigator.clipboard.readText())
   await page.getByRole('button', { name: '预览剪贴板图片' }).click()
   await expect(page.getByRole('dialog', { name: '图片预览' })).toBeVisible()
+  await expectUnifiedModal(page)
   await expect(page.getByAltText('剪贴板图片预览，1 × 1')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(clipboardBeforePreview)
   await page.getByRole('button', { name: '关闭图片预览' }).click()
@@ -633,7 +679,7 @@ test('health debug event triggers a reminder before its schedule', async ({ page
   await expect(page.getByText('补充一些水分，给专注力充充电。')).toBeVisible()
 })
 
-test('health reminder countdown auto-completes after one minute', async ({ page }) => {
+test('health reminder countdown auto-completes after thirty seconds', async ({ page }) => {
   await page.clock.install()
   await page.setViewportSize({ width: 340, height: 340 })
   await page.goto('/?window=orb')
@@ -643,9 +689,13 @@ test('health reminder countdown auto-completes after one minute', async ({ page 
   })
 
   await expect(page.getByRole('alert', { name: '喝水提醒' })).toBeVisible()
-  await expect(page.locator('.countdown-progress')).toHaveCSS('animation-duration', '60s')
+  const durationSeconds = await page.locator('.countdown-progress').evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).animationDuration),
+  )
+  expect(durationSeconds).toBeGreaterThan(29)
+  expect(durationSeconds).toBeLessThanOrEqual(30)
   await page.getByRole('alert', { name: '喝水提醒' }).screenshot({ path: 'test-results/health-reminder-countdown.png' })
-  await page.clock.fastForward(60_000)
+  await page.clock.fastForward(30_000)
   await expect(page.getByRole('alert', { name: '喝水提醒' })).toHaveCount(0)
   await expect.poll(async () => page.evaluate(() => {
     const logs = JSON.parse(localStorage.getItem('petal-toolbox.reminder-logs') ?? '[]') as { action: string }[]
@@ -653,18 +703,71 @@ test('health reminder countdown auto-completes after one minute', async ({ page 
   })).toBe('completed')
 })
 
+test('simultaneous health reminders count down and complete in the background', async ({ page }) => {
+  await page.clock.install()
+  await page.setViewportSize({ width: 340, height: 340 })
+  await page.goto('/?window=orb')
+  await page.evaluate(() => {
+    const due = new Date(Date.now() - 1_000).toISOString()
+    localStorage.setItem('petal-toolbox.health-settings', JSON.stringify({
+      silentMode: false,
+      quietHours: { enabled: false, start: '22:00', end: '08:00' },
+      reminders: [
+        { id: 'stand', enabled: true, intervalMinutes: 50, snoozeMinutes: 10, title: '起立活动', message: '站起来走动一下。', nextTriggerAt: due },
+        { id: 'eye_rest', enabled: true, intervalMinutes: 30, snoozeMinutes: 5, title: '远眺护眼', message: '看看远处。', nextTriggerAt: due },
+      ],
+    }))
+  })
+  await page.reload()
+
+  await expect(page.getByRole('alert', { name: '起立活动提醒' })).toBeVisible()
+  await expect(page.getByText('还有 2 项提醒')).toBeVisible()
+  await expect(page.getByRole('alert', { name: '远眺护眼提醒' })).toHaveCount(0)
+  await page.clock.fastForward(30_000)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => {
+    const logs = JSON.parse(localStorage.getItem('petal-toolbox.reminder-logs') ?? '[]') as { action: string }[]
+    return logs.filter((item) => item.action === 'completed').length
+  })).toBe(2)
+})
+
+test('health reminders missed while the app was unavailable are discarded on startup', async ({ page }) => {
+  await page.setViewportSize({ width: 340, height: 340 })
+  await page.goto('/?window=orb')
+  await page.evaluate(() => {
+    const missed = new Date(Date.now() - 31_000).toISOString()
+    localStorage.setItem('petal-toolbox.health-settings', JSON.stringify({
+      silentMode: false,
+      quietHours: { enabled: false, start: '22:00', end: '08:00' },
+      reminders: [
+        { id: 'stand', enabled: true, intervalMinutes: 50, snoozeMinutes: 10, title: '起立活动', message: '站起来走动一下。', nextTriggerAt: missed },
+      ],
+    }))
+  })
+  await page.reload()
+  await page.getByRole('button', { name: '展开冒泡' }).waitFor()
+
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => {
+    const settings = JSON.parse(localStorage.getItem('petal-toolbox.health-settings') ?? '{}') as {
+      reminders?: { nextTriggerAt: string }[]
+    }
+    return new Date(settings.reminders?.[0]?.nextTriggerAt ?? 0).getTime() > Date.now()
+  })).toBe(true)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('petal-toolbox.reminder-logs') ?? '[]').length)).toBe(0)
+})
+
 test('a due health reminder opens one card and completion updates statistics', async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 340 })
   await page.goto('/?window=orb')
   await page.evaluate(() => {
-    const now = new Date(Date.now() - 60_000).toISOString()
+    const now = new Date(Date.now() - 1_000).toISOString()
     localStorage.setItem('petal-toolbox.health-settings', JSON.stringify({
       silentMode: false,
       quietHours: { enabled: false, start: '22:00', end: '08:00' },
       reminders: [
         { id: 'stand', enabled: true, intervalMinutes: 50, snoozeMinutes: 10, title: '起立活动', message: '站起来走动一下，让身体重新舒展。', nextTriggerAt: now },
         { id: 'water', enabled: false, intervalMinutes: 45, snoozeMinutes: 10, title: '喝水', message: '补充一些水分。', nextTriggerAt: now },
-        { id: 'pelvic_floor', enabled: false, intervalMinutes: 60, snoozeMinutes: 10, title: '提肛训练', message: '进行一组训练。', nextTriggerAt: now },
         { id: 'eye_rest', enabled: false, intervalMinutes: 30, snoozeMinutes: 5, title: '远眺护眼', message: '看看远处。', nextTriggerAt: now },
         { id: 'posture', enabled: false, intervalMinutes: 40, snoozeMinutes: 10, title: '坐姿调整', message: '调整坐姿。', nextTriggerAt: now },
       ],
@@ -673,6 +776,7 @@ test('a due health reminder opens one card and completion updates statistics', a
   await page.reload()
 
   await expect(page.getByRole('alert', { name: '起立活动提醒' })).toBeVisible()
+  await expect(page.getByRole('alert', { name: '起立活动提醒' })).toHaveCSS('backdrop-filter', 'none')
   await expect(page.getByRole('button', { name: '查看健康提醒' })).toBeVisible()
   await page.waitForTimeout(320)
   await page.screenshot({ path: 'test-results/reminder-card-stage5.png', omitBackground: true })

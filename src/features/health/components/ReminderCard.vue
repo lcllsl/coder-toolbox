@@ -40,7 +40,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.reminder-card { position: relative; width: 238px; height: 126px; padding: 12px 13px; border: 1px solid color-mix(in srgb, var(--color-health) 22%, var(--color-border)); border-radius: var(--radius-lg); color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: 0 8px 22px -10px rgb(22 93 79 / 36%); backdrop-filter: blur(18px) saturate(1.15); }
+.reminder-card { position: relative; isolation: isolate; width: 238px; height: 126px; padding: 12px 13px; border: 1px solid color-mix(in srgb, var(--color-health) 22%, var(--color-border)); border-radius: var(--radius-lg); color: var(--color-text); background: color-mix(in srgb, var(--color-surface) 96%, transparent); box-shadow: 0 8px 22px -10px rgb(22 93 79 / 36%); -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 .reminder-countdown-ring { position: absolute; z-index: 2; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; pointer-events: none; }
 .reminder-countdown-ring rect { fill: none; vector-effect: non-scaling-stroke; }
 .countdown-track { stroke: color-mix(in srgb, var(--color-health) 12%, transparent); stroke-width: 1.5; }

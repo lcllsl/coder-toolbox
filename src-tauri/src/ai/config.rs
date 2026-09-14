@@ -1,20 +1,14 @@
 use keyring::{Entry, Error as KeyringError};
 use zeroize::Zeroizing;
 
-const KEYRING_SERVICE: &str = "com.petaltoolbox.desktop.ai";
+// v2 intentionally avoids probing the legacy development credential. Reading that
+// item can trigger a macOS authorization dialog after an ad-hoc binary is rebuilt.
+const KEYRING_SERVICE: &str = "com.petaltoolbox.desktop.ai.v2";
 const KEYRING_ACCOUNT: &str = "deepseek-api-key";
 
 fn entry() -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
         .map_err(|_| "ai_secure_storage_unavailable".to_owned())
-}
-
-pub fn has_api_key() -> Result<bool, String> {
-    match entry()?.get_password() {
-        Ok(value) => Ok(!value.trim().is_empty()),
-        Err(KeyringError::NoEntry) => Ok(false),
-        Err(_) => Err("ai_secure_storage_read_failed".to_owned()),
-    }
 }
 
 pub fn save_api_key(api_key: String) -> Result<(), String> {

@@ -40,6 +40,46 @@ button:disabled {
   opacity: 0.48;
 }
 
+/* Shared modal treatment: the scrim is present on the first painted frame;
+   only the dialog surface animates so opening never flashes an undimmed panel. */
+.ui-modal-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgb(10 14 22 / 40%);
+  backdrop-filter: blur(6px) saturate(1.08);
+  -webkit-backdrop-filter: blur(6px) saturate(1.08);
+}
+
+.ui-modal-surface {
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+  transform-origin: center;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: opacity, transform;
+}
+
+.ui-modal-enter-active .ui-modal-surface {
+  transition: opacity 180ms ease-out, transform 220ms var(--ease-standard);
+}
+
+.ui-modal-leave-active .ui-modal-surface {
+  transition: opacity 140ms ease-in, transform 160ms ease-in;
+}
+
+.ui-modal-enter-from .ui-modal-surface,
+.ui-modal-leave-to .ui-modal-surface {
+  opacity: 0;
+  transform: translateY(8px) scale(.96);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

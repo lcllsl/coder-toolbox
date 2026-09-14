@@ -6,6 +6,7 @@ import type { HealthSettings } from '../types'
 
 const STORE_KEY = 'healthSettings'
 const BROWSER_KEY = 'petal-toolbox.health-settings'
+const REMOVED_DEFAULT_REMINDER_ID = 'pelvic_floor'
 
 export function createDefaultHealthSettings(now = new Date()): HealthSettings {
   return {
@@ -22,7 +23,8 @@ export async function loadHealthSettings(): Promise<HealthSettings> {
       ? await (await load('settings.json')).get<HealthSettings>(STORE_KEY)
       : JSON.parse(localStorage.getItem(BROWSER_KEY) ?? 'null') as HealthSettings | null
     if (!saved) return defaults
-    return { ...defaults, ...saved, quietHours: { ...defaults.quietHours, ...saved.quietHours }, reminders: normalizeSchedules(saved.reminders) }
+    const reminders = saved.reminders.filter((reminder) => reminder.id !== REMOVED_DEFAULT_REMINDER_ID)
+    return { ...defaults, ...saved, quietHours: { ...defaults.quietHours, ...saved.quietHours }, reminders: normalizeSchedules(reminders) }
   } catch {
     return defaults
   }

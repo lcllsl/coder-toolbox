@@ -7,8 +7,11 @@ const PERCENT_HEADER = /(率|比例|百分比|占比|增长率|完成率|margin|
 const DATE_HEADER = /(日期|时间|年月|月份|季度|date|time|month|year)/i
 
 function isDateText(value: string): boolean {
-  if (!/^\d{4}[-/.年]\d{1,2}(?:[-/.月]\d{1,2}日?)?(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/.test(value.trim())) return false
-  return !Number.isNaN(Date.parse(value.replace(/[年月]/g, '-').replace('日', '')))
+  const text = value.trim()
+  const optionalTime = '(?:[ T]\\d{1,2}:\\d{2}(?::\\d{2})?)?'
+  const yearFirst = new RegExp(`^\\d{4}[-/.年]\\d{1,2}(?:[-/.月]\\d{1,2}日?)?${optionalTime}$`)
+  const yearLast = new RegExp(`^\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}${optionalTime}$`)
+  return yearFirst.test(text) || yearLast.test(text)
 }
 
 function isNumericText(value: string): boolean {
@@ -58,7 +61,14 @@ export function inferColumnKind(header: string, values: SpreadsheetCell[]): Infe
 
 export function normalizeCell(value: SpreadsheetCell, kind: ColumnKind): string | number | boolean | null {
   if (value === null || value === '') return null
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null
+    const pad = (part: number) => String(part).padStart(2, '0')
+    const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+    return value.getHours() || value.getMinutes() || value.getSeconds()
+      ? `${date} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+      : date
+  }
   if (kind === 'boolean') {
     if (typeof value === 'boolean') return value
     return ['true', 'yes', '是', '有'].includes(String(value).trim().toLowerCase())

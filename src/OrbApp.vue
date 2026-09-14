@@ -10,7 +10,7 @@ import OrbButton from '@/components/orb/OrbButton.vue'
 import PetalPlaceholder from '@/components/petals/PetalPlaceholder.vue'
 import ReminderCard from '@/features/health/components/ReminderCard.vue'
 import { computeReminderCardRegion } from '@/features/health/core/reminder-layout'
-import { REMINDER_AUTO_COMPLETE_MS, REMINDER_AUTO_COMPLETE_SECONDS } from '@/features/health/core/reminder-timing'
+import { REMINDER_AUTO_COMPLETE_SECONDS } from '@/features/health/core/reminder-timing'
 import { onHealthDebugTrigger, onHealthSettingsChanged } from '@/services/tauri/health'
 import { onClipboardSettingsChanged } from '@/services/tauri/clipboard'
 import { onAppSettingsChanged, onGlobalShortcut, onTrayModeRequested, updateTrayMode } from '@/services/tauri/settings'
@@ -76,6 +76,7 @@ const expanded = computed(() =>
 const panelOpen = computed(() =>
   ['panel-opening', 'panel-open', 'panel-closing'].includes(orbStore.uiState),
 )
+const reminderCountdownSeconds = ref(REMINDER_AUTO_COMPLETE_SECONDS)
 const stageStyle = computed(() => ({
   '--orb-x': `${geometry.value.orbX}px`,
   '--orb-y': `${geometry.value.orbY}px`,
@@ -99,9 +100,8 @@ let moving = false
 let edgeTransition: Promise<void> | null = null
 let healthTimer: number | undefined
 let reminderCardTimer: number | undefined
-let timedReminderId: string | undefined
-let lastHealthTickAt = Date.now()
 let clickTimer: number | undefined
+let lastHealthTickAt = Date.now()
 
 function clearTransitionTimer() {
   if (transitionTimer !== undefined) window.clearTimeout(transitionTimer)
@@ -116,7 +116,18 @@ function clearEdgeTimer() {
 function clearReminderCardTimer() {
   if (reminderCardTimer !== undefined) window.clearTimeout(reminderCardTimer)
   reminderCardTimer = undefined
-  timedReminderId = undefined
+}
+
+function schedulePendingReminderCompletion() {
+  clearReminderCardTimer()
+  const deadlines = healthStore.pendingIds
+    .map((id) => healthStore.pendingAutoCompleteAt[id])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite)
+  if (!deadlines.length) return
+  const delay = Math.max(0, Math.min(...deadlines) - Date.now())
+  reminderCardTimer = window.setTimeout(() => void completeExpiredReminders(), delay)
 }
 
 function clearClickTimer() {
@@ -198,16 +209,14 @@ async function openReminderCard() {
   }
   await nextTick()
   await enableExpandedHitTest()
-  const activeReminderId = healthStore.activeReminder.id
-  if (reminderCardTimer === undefined || timedReminderId !== activeReminderId) {
-    clearReminderCardTimer()
-    timedReminderId = activeReminderId
-    reminderCardTimer = window.setTimeout(() => void completeReminder(), REMINDER_AUTO_COMPLETE_MS)
-  }
+  const deadline = healthStore.activeReminderAutoCompleteAt
+  reminderCountdownSeconds.value = deadline
+    ? Math.max(.1, (new Date(deadline).getTime() - Date.now()) / 1_000)
+    : REMINDER_AUTO_COMPLETE_SECONDS
+  schedulePendingReminderCompletion()
 }
 
 async function closeReminderWindow() {
-  clearReminderCardTimer()
   await disableExpandedHitTest()
   if (orbStore.geometry) await setOrbExpanded(false, orbStore.geometry)
   orbStore.setGeometry(null)
@@ -220,7 +229,16 @@ async function runHealthTick() {
   const resumedAfterSleep = now.getTime() - lastHealthTickAt > 30_000
   lastHealthTickAt = now.getTime()
   await healthStore.tick(now, resumedAfterSleep)
+  schedulePendingReminderCompletion()
   if (healthStore.cardVisible) await openReminderCard()
+}
+
+async function completeExpiredReminders() {
+  clearReminderCardTimer()
+  const expired = await healthStore.completeExpired(new Date())
+  if (expired.length && healthStore.cardVisible) await openReminderCard()
+  else if (expired.length && orbStore.uiState === 'reminder') await closeReminderWindow()
+  schedulePendingReminderCompletion()
 }
 
 async function completeReminder() {
@@ -431,6 +449,7 @@ onMounted(async () => {
   unlistenHealthSettings = await onHealthSettingsChanged(() => void healthStore.reloadSettings())
   unlistenHealthDebug = await onHealthDebugTrigger((reminderId) => {
     healthStore.triggerDebugReminder(reminderId)
+    schedulePendingReminderCompletion()
     void openReminderCard()
   })
   await runHealthTick()
@@ -486,10 +505,10 @@ onUnmounted(() => {
         :style="{ left: `${reminderRegion.x}px`, top: `${reminderRegion.y}px` }"
       >
         <ReminderCard
-          :key="healthStore.activeReminder.id"
+          :key="`${healthStore.activeReminder.id}:${healthStore.activeReminderAutoCompleteAt}`"
           :reminder="healthStore.activeReminder"
           :pending-count="healthStore.pendingCount"
-          :countdown-seconds="REMINDER_AUTO_COMPLETE_SECONDS"
+          :countdown-seconds="reminderCountdownSeconds"
           @complete="completeReminder"
           @snooze="snoozeReminder"
         />

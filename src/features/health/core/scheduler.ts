@@ -7,7 +7,6 @@ export function createDefaultReminders(now = new Date()): ReminderConfig[] {
   const definitions: Array<Omit<ReminderConfig, 'nextTriggerAt'>> = [
     { id: 'stand', enabled: true, intervalMinutes: 50, snoozeMinutes: 10, title: '起立活动', message: '站起来走动一下，让身体重新舒展。' },
     { id: 'water', enabled: true, intervalMinutes: 45, snoozeMinutes: 10, title: '喝水', message: '补充一些水分，给专注力充充电。' },
-    { id: 'pelvic_floor', enabled: false, intervalMinutes: 60, snoozeMinutes: 10, title: '提肛训练', message: '进行一组轻量训练，保持核心活力。' },
     { id: 'eye_rest', enabled: true, intervalMinutes: 30, snoozeMinutes: 5, title: '远眺护眼', message: '看看远处 20 秒，让眼睛放松一下。' },
     { id: 'posture', enabled: false, intervalMinutes: 40, snoozeMinutes: 10, title: '坐姿调整', message: '放松肩颈，调整屏幕与坐姿。' },
   ]

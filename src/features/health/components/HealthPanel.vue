@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { Component } from 'vue'
-import { Bell, BellOff, Clock3, Coffee, Droplets, Eye, HeartPulse, LucideMoonStar, Pause, PersonStanding, Play, Plus, Trash2, X } from '@lucide/vue'
+import { Bell, BellOff, Clock3, Coffee, Droplets, Eye, LucideMoonStar, Pause, PersonStanding, Play, Plus, Trash2, X } from '@lucide/vue'
 
 import { useFeedbackStore } from '@/app/stores/feedback'
 import { useHealthStore } from '@/app/stores/health'
@@ -16,7 +16,7 @@ const showCreate = ref(false)
 const creating = ref(false)
 const deleteId = ref<ReminderId>()
 const draft = reactive({ title: '', message: '', intervalMinutes: 45, enabled: true })
-const icons: Record<string, Component> = { stand: PersonStanding, water: Droplets, pelvic_floor: HeartPulse, eye_rest: Eye, posture: Coffee }
+const icons: Record<string, Component> = { stand: PersonStanding, water: Droplets, eye_rest: Eye, posture: Coffee }
 const nextReminder = computed(() =>
   [...health.settings.reminders]
     .filter((item) => item.enabled && item.nextTriggerAt)

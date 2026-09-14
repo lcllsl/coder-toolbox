@@ -98,15 +98,15 @@ watch(
 
 <template>
   <Teleport to="body">
-    <Transition name="vault-dialog">
+    <Transition name="ui-modal" :duration="{ enter: 220, leave: 160 }">
       <div
         v-if="open"
-        class="vault-dialog-backdrop"
+        class="vault-dialog-backdrop ui-modal-backdrop"
         @click.self="close"
         @keydown.esc.stop.prevent="close"
         @keydown.tab="trapFocus"
       >
-        <section ref="dialogElement" class="vault-dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="item ? '编辑凭据' : '新增凭据'">
+        <section ref="dialogElement" class="vault-dialog ui-modal-surface" role="dialog" aria-modal="true" tabindex="-1" :aria-label="item ? '编辑凭据' : '新增凭据'">
           <header>
             <div>
               <span class="dialog-icon"><KeyRound :size="18" /></span>
@@ -171,8 +171,8 @@ watch(
 </template>
 
 <style scoped>
-.vault-dialog-backdrop { position: fixed; z-index: 46; inset: 0; display: grid; place-items: center; padding: 28px; background: rgb(10 14 22 / 38%); backdrop-filter: blur(6px); }
-.vault-dialog { width: min(450px, 100%); max-height: calc(100vh - 56px); overflow-y: auto; padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface); box-shadow: var(--shadow-panel); }
+.vault-dialog-backdrop { padding: 28px; }
+.vault-dialog { width: min(450px, 100%); max-height: calc(100vh - 56px); overflow-y: auto; padding: 18px; }
 .vault-dialog > header, .vault-dialog > header > div { display: flex; align-items: center; gap: 10px; }
 .vault-dialog > header { justify-content: space-between; margin-bottom: 15px; }
 .dialog-icon { width: 38px; height: 38px; display: grid; flex: 0 0 auto; place-items: center; border-radius: var(--radius-sm); color: var(--color-quick-actions); background: color-mix(in srgb, var(--color-quick-actions) 11%, transparent); }
@@ -182,6 +182,5 @@ form { display: grid; gap: 11px; }label { display: grid; gap: 5px; color: var(--
 input, textarea { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-xs); color: var(--color-text); background: var(--color-surface-soft); font-size: var(--font-size-body); outline: 0; }textarea { resize: vertical; line-height: 1.45; }.password-field { display: grid; grid-template-columns: minmax(0, 1fr) 34px 34px; gap: 5px; }.password-field button { display: grid; place-items: center; border: 1px solid var(--color-border); border-radius: var(--radius-xs); color: var(--color-text-muted); background: var(--color-surface); cursor: pointer; }
 input:focus, textarea:focus { border-color: var(--color-focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 14%, transparent); }.field-error { margin: 0; color: #d45d61; font-size: var(--font-size-caption); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }.dialog-actions button { min-height: 34px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 13px; border-radius: var(--radius-pill); font-size: var(--font-size-button); cursor: pointer; }.secondary { border: 1px solid var(--color-border); color: var(--color-text-secondary); background: transparent; }.primary { border: 0; color: var(--color-on-accent); background: var(--color-quick-actions); }
-button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }.vault-dialog-enter-active, .vault-dialog-leave-active { transition: opacity var(--duration-normal); }.vault-dialog-enter-active .vault-dialog, .vault-dialog-leave-active .vault-dialog { transition: transform var(--duration-normal); }.vault-dialog-enter-from, .vault-dialog-leave-to { opacity: 0; }.vault-dialog-enter-from .vault-dialog, .vault-dialog-leave-to .vault-dialog { transform: translateY(7px) scale(.96); }
-@media (prefers-reduced-motion: reduce) { .vault-dialog-enter-active, .vault-dialog-leave-active, .vault-dialog-enter-active .vault-dialog, .vault-dialog-leave-active .vault-dialog { transition-duration: 20ms; } }
+button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 </style>

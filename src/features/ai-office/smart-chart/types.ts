@@ -125,6 +125,23 @@ export interface BuiltReport {
   source: { fileName: string; sheetName: string; rowCount: number }
 }
 
+export interface SavedChartSummary {
+  id: string
+  title: string
+  fileName: string
+  sheetName: string
+  rowCount: number
+  chartCount: number
+  kpiCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SavedChartProject extends SavedChartSummary {
+  dataset: TabularDataset
+  reportSpec: ReportSpec
+}
+
 export const COLUMN_KIND_LABELS: Record<ColumnKind, string> = {
   text: '文本',
   category: '分类',

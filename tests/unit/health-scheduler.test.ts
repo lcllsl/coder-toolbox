@@ -10,21 +10,25 @@ import {
   isHealthSuppressed,
   isInQuietHours,
 } from '@/features/health/core/scheduler'
-import { REMINDER_AUTO_COMPLETE_MS, REMINDER_AUTO_COMPLETE_SECONDS } from '@/features/health/core/reminder-timing'
-import { createDefaultHealthSettings } from '@/features/health/repositories/health-settings-repository'
+import {
+  hasReminderWindowElapsed,
+  REMINDER_AUTO_COMPLETE_MS,
+  REMINDER_AUTO_COMPLETE_SECONDS,
+} from '@/features/health/core/reminder-timing'
+import { createDefaultHealthSettings, loadHealthSettings } from '@/features/health/repositories/health-settings-repository'
 
 describe('health reminder scheduler', () => {
-  it('uses a one-minute automatic completion window', () => {
-    expect(REMINDER_AUTO_COMPLETE_SECONDS).toBe(60)
-    expect(REMINDER_AUTO_COMPLETE_MS).toBe(60_000)
+  it('uses a thirty-second automatic completion window', () => {
+    expect(REMINDER_AUTO_COMPLETE_SECONDS).toBe(30)
+    expect(REMINDER_AUTO_COMPLETE_MS).toBe(30_000)
+    expect(hasReminderWindowElapsed('2026-07-21T08:00:00.000Z', new Date('2026-07-21T08:00:30.000Z'))).toBe(true)
   })
 
-  it('creates the five documented defaults', () => {
+  it('creates the four documented defaults', () => {
     const reminders = createDefaultReminders(new Date('2026-07-21T08:00:00Z'))
     expect(reminders.map(({ id, enabled, intervalMinutes }) => ({ id, enabled, intervalMinutes }))).toEqual([
       { id: 'stand', enabled: true, intervalMinutes: 50 },
       { id: 'water', enabled: true, intervalMinutes: 45 },
-      { id: 'pelvic_floor', enabled: false, intervalMinutes: 60 },
       { id: 'eye_rest', enabled: true, intervalMinutes: 30 },
       { id: 'posture', enabled: false, intervalMinutes: 40 },
     ])
@@ -58,7 +62,7 @@ describe('health reminder scheduler', () => {
   it('returns simultaneous reminders in product priority order', () => {
     const now = new Date('2026-07-21T08:00:00Z')
     const reminders = createDefaultReminders(now).map((item) => ({ ...item, enabled: true, nextTriggerAt: now.toISOString() }))
-    expect(getDueReminderIds(reminders, now)).toEqual(['stand', 'eye_rest', 'water', 'posture', 'pelvic_floor'])
+    expect(getDueReminderIds(reminders, now)).toEqual(['stand', 'eye_rest', 'water', 'posture'])
   })
 
   it('suppresses display during silent, pause, mute-today, or quiet modes', () => {
@@ -78,6 +82,20 @@ describe('health reminder actions', () => {
   beforeEach(() => {
     localStorage.clear()
     setActivePinia(createPinia())
+  })
+
+  it('removes the retired pelvic-floor default from previously saved settings', async () => {
+    const now = new Date('2026-07-21T10:00:00Z')
+    const settings = createDefaultHealthSettings(now)
+    settings.reminders.push({
+      id: 'pelvic_floor', enabled: false, intervalMinutes: 60, snoozeMinutes: 10,
+      title: '提肛训练', message: '进行一组训练。', nextTriggerAt: now.toISOString(),
+    })
+    localStorage.setItem('petal-toolbox.health-settings', JSON.stringify(settings))
+
+    const loaded = await loadHealthSettings()
+
+    expect(loaded.reminders.map((reminder) => reminder.id)).toEqual(['stand', 'water', 'eye_rest', 'posture'])
   })
 
   it('records completion and resets the interval', async () => {
@@ -107,17 +125,83 @@ describe('health reminder actions', () => {
     expect(store.settings.reminders.find((item) => item.id === 'eye_rest')?.nextTriggerAt).toBe('2026-07-21T10:05:00.000Z')
   })
 
-  it('keeps only the highest-priority reminder after a sleep-like gap', async () => {
+  it('queues every due reminder with an independent background deadline', async () => {
     const store = useHealthStore()
     const now = new Date('2026-07-21T10:00:00Z')
     store.settings.quietHours.enabled = false
     store.settings.reminders = store.settings.reminders.map((item) => ({ ...item, enabled: true, nextTriggerAt: now.toISOString() }))
     store.initialized = true
 
+    await store.tick(now)
+
+    expect(store.pendingIds).toEqual(['stand', 'eye_rest', 'water', 'posture'])
+    expect(new Set(Object.values(store.pendingAutoCompleteAt))).toEqual(new Set(['2026-07-21T10:00:30.000Z']))
+  })
+
+  it('starts later reminders while the first card is still pending and expires each on schedule', async () => {
+    const store = useHealthStore()
+    const start = new Date('2026-07-21T10:00:00Z')
+    store.settings.quietHours.enabled = false
+    store.settings.reminders = store.settings.reminders.map((item) => ({
+      ...item,
+      enabled: item.id === 'stand' || item.id === 'water',
+      nextTriggerAt: new Date(start.getTime() + (item.id === 'water' ? 10_000 : 0)).toISOString(),
+    }))
+    store.initialized = true
+
+    await store.tick(start)
+    await store.tick(new Date(start.getTime() + 10_000))
+    expect(store.pendingIds).toEqual(['stand', 'water'])
+    expect(store.pendingAutoCompleteAt).toMatchObject({
+      stand: '2026-07-21T10:00:30.000Z',
+      water: '2026-07-21T10:00:40.000Z',
+    })
+
+    await store.completeExpired(new Date(start.getTime() + 30_000))
+    expect(store.pendingIds).toEqual(['water'])
+    expect(store.completedToday.stand).toBe(1)
+    await store.completeExpired(new Date(start.getTime() + 40_000))
+    expect(store.pendingIds).toEqual([])
+    expect(store.completedToday.water).toBe(1)
+  })
+
+  it('discards reminders missed while the system was asleep without counting them as completed', async () => {
+    const store = useHealthStore()
+    const now = new Date('2026-07-21T10:00:00Z')
+    store.settings.quietHours.enabled = false
+    store.settings.reminders = store.settings.reminders.map((item) => ({
+      ...item,
+      enabled: item.id === 'stand' || item.id === 'water',
+      nextTriggerAt: now.toISOString(),
+    }))
+    store.initialized = true
+
     await store.tick(now, true)
 
-    expect(store.pendingIds).toEqual(['stand'])
-    expect(new Date(store.settings.reminders.find((item) => item.id === 'eye_rest')!.nextTriggerAt!).getTime()).toBeGreaterThan(now.getTime())
+    expect(store.pendingIds).toEqual([])
+    expect(store.cardVisible).toBe(false)
+    expect(store.completedToday).toEqual({})
+    expect(store.settings.reminders.find((item) => item.id === 'stand')?.nextTriggerAt).toBe('2026-07-21T10:50:00.000Z')
+    expect(store.settings.reminders.find((item) => item.id === 'water')?.nextTriggerAt).toBe('2026-07-21T10:45:00.000Z')
+    expect(localStorage.getItem('petal-toolbox.reminder-logs')).toBeNull()
+  })
+
+  it('discards a reminder whose display window elapsed before the app checked it', async () => {
+    const store = useHealthStore()
+    const now = new Date('2026-07-21T10:00:31Z')
+    store.settings.quietHours.enabled = false
+    store.settings.reminders = store.settings.reminders.map((item) => ({
+      ...item,
+      enabled: item.id === 'stand',
+      nextTriggerAt: '2026-07-21T10:00:00.000Z',
+    }))
+    store.initialized = true
+
+    await store.tick(now)
+
+    expect(store.pendingIds).toEqual([])
+    expect(store.completedToday.stand).toBeUndefined()
+    expect(store.settings.reminders.find((item) => item.id === 'stand')?.nextTriggerAt).toBe('2026-07-21T10:50:31.000Z')
   })
 
   it('adds and deletes default or custom reminder projects', async () => {

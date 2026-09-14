@@ -19,6 +19,11 @@ import {
   clearReminderLogs,
   getTodayCompletedCounts,
 } from '@/features/health/repositories/reminder-log-repository'
+import {
+  createReminderAutoCompleteAt,
+  getExpiredReminderIds,
+  hasReminderWindowElapsed,
+} from '@/features/health/core/reminder-timing'
 import type { HealthSettings, NewReminderInput, ReminderConfig, ReminderId } from '@/features/health/types'
 
 export const useHealthStore = defineStore('health', {
@@ -26,6 +31,7 @@ export const useHealthStore = defineStore('health', {
     settings: createDefaultHealthSettings() as HealthSettings,
     completedToday: {} as Partial<Record<ReminderId, number>>,
     pendingIds: [] as ReminderId[],
+    pendingAutoCompleteAt: {} as Partial<Record<ReminderId, string>>,
     cardVisible: false,
     initialized: false,
   }),
@@ -35,6 +41,10 @@ export const useHealthStore = defineStore('health', {
       return state.settings.reminders.find((reminder) => reminder.id === id)
     },
     pendingCount: (state) => state.pendingIds.length,
+    activeReminderAutoCompleteAt(state): string | undefined {
+      const id = state.pendingIds[0]
+      return id ? state.pendingAutoCompleteAt[id] : undefined
+    },
     totalCompletedToday: (state) =>
       Object.values(state.completedToday).reduce<number>((total, count) => total + (count ?? 0), 0),
   },
@@ -51,6 +61,9 @@ export const useHealthStore = defineStore('health', {
       this.settings = await loadHealthSettings()
       const validIds = new Set(this.settings.reminders.map((reminder) => reminder.id))
       this.pendingIds = this.pendingIds.filter((id) => validIds.has(id))
+      this.pendingAutoCompleteAt = Object.fromEntries(
+        Object.entries(this.pendingAutoCompleteAt).filter(([id]) => validIds.has(id)),
+      )
       this.cardVisible = this.cardVisible && this.pendingIds.length > 0
     },
     async persist(notify = true) {
@@ -79,6 +92,9 @@ export const useHealthStore = defineStore('health', {
       if (!this.settings.reminders.some((reminder) => reminder.id === id)) return
       this.settings.reminders = this.settings.reminders.filter((reminder) => reminder.id !== id)
       this.pendingIds = this.pendingIds.filter((pendingId) => pendingId !== id)
+      const deadlines = { ...this.pendingAutoCompleteAt }
+      delete deadlines[id]
+      this.pendingAutoCompleteAt = deadlines
       delete this.completedToday[id]
       this.cardVisible = this.cardVisible && this.pendingIds.length > 0
       await this.persist()
@@ -101,42 +117,79 @@ export const useHealthStore = defineStore('health', {
       this.cardVisible = false
       await this.persist()
     },
-    async tick(now = new Date(), onlyHighestPriority = false) {
-      if (!this.initialized || this.pendingIds.length) return
-      const due = getDueReminderIds(this.settings.reminders, now)
+    async tick(now = new Date(), resumedAfterSleep = false) {
+      if (!this.initialized) return
+      const queued = new Set(this.pendingIds)
+      const due = getDueReminderIds(this.settings.reminders, now).filter((id) => !queued.has(id))
       if (!due.length) return
-      if (isHealthSuppressed(this.settings, now)) {
+      if (isHealthSuppressed(this.settings, now) || resumedAfterSleep) {
         this.settings.reminders = this.settings.reminders.map((reminder) =>
           due.includes(reminder.id) ? rescheduleReminder(reminder, 'interval', now) : reminder,
         )
         await this.persist(false)
         return
       }
-      if (onlyHighestPriority && due.length > 1) {
-        const [highest, ...skipped] = due
+      const missed = new Set(due.filter((id) => {
+        const triggerAt = this.settings.reminders.find((reminder) => reminder.id === id)?.nextTriggerAt
+        return hasReminderWindowElapsed(triggerAt, now)
+      }))
+      if (missed.size) {
         this.settings.reminders = this.settings.reminders.map((reminder) =>
-          skipped.includes(reminder.id) ? rescheduleReminder(reminder, 'interval', now) : reminder,
+          missed.has(reminder.id) ? rescheduleReminder(reminder, 'interval', now) : reminder,
         )
-        this.pendingIds = highest ? [highest] : []
         await this.persist(false)
-      } else {
-        this.pendingIds = due
+      }
+      const actionable = due.filter((id) => !missed.has(id))
+      if (!actionable.length) return
+      this.pendingIds = [...this.pendingIds, ...actionable]
+      this.pendingAutoCompleteAt = {
+        ...this.pendingAutoCompleteAt,
+        ...Object.fromEntries(actionable.map((id) => {
+          const triggerAt = this.settings.reminders.find((reminder) => reminder.id === id)?.nextTriggerAt
+          const startedAt = triggerAt ? new Date(triggerAt) : now
+          return [id, createReminderAutoCompleteAt(Number.isNaN(startedAt.getTime()) ? now : startedAt)]
+        })),
       }
       this.cardVisible = true
     },
-    async completeActive(now = new Date()) {
-      const id = this.pendingIds[0]
-      if (!id) return
+    async completeReminder(id: ReminderId, now = new Date()) {
+      if (!this.pendingIds.includes(id)) return
       const reminder = this.settings.reminders.find((item) => item.id === id)
       if (!reminder) return
+      this.pendingIds = this.pendingIds.filter((pendingId) => pendingId !== id)
+      const deadlines = { ...this.pendingAutoCompleteAt }
+      delete deadlines[id]
+      this.pendingAutoCompleteAt = deadlines
+      this.cardVisible = this.pendingIds.length > 0
       await addReminderLog(id, 'completed', now)
       this.completedToday[id] = (this.completedToday[id] ?? 0) + 1
       this.settings.reminders = this.settings.reminders.map((item) =>
         item.id === id ? rescheduleReminder(item, 'interval', now) : item,
       )
-      this.pendingIds = this.pendingIds.slice(1)
-      this.cardVisible = this.pendingIds.length > 0
       await this.persist(false)
+    },
+    async completeActive(now = new Date()) {
+      const id = this.pendingIds[0]
+      if (id) await this.completeReminder(id, now)
+    },
+    async completeExpired(now = new Date()) {
+      const expired = getExpiredReminderIds(this.pendingIds, this.pendingAutoCompleteAt, now)
+      if (!expired.length) return []
+      const expiredSet = new Set(expired)
+      this.pendingIds = this.pendingIds.filter((id) => !expiredSet.has(id))
+      const deadlines = { ...this.pendingAutoCompleteAt }
+      for (const id of expired) delete deadlines[id]
+      this.pendingAutoCompleteAt = deadlines
+      this.cardVisible = this.pendingIds.length > 0
+      for (const id of expired) {
+        await addReminderLog(id, 'completed', now)
+        this.completedToday[id] = (this.completedToday[id] ?? 0) + 1
+      }
+      this.settings.reminders = this.settings.reminders.map((item) =>
+        expiredSet.has(item.id) ? rescheduleReminder(item, 'interval', now) : item,
+      )
+      await this.persist(false)
+      return expired
     },
     async snoozeActive(now = new Date()) {
       const id = this.pendingIds[0]
@@ -146,14 +199,18 @@ export const useHealthStore = defineStore('health', {
         item.id === id ? rescheduleReminder(item, 'snooze', now) : item,
       )
       this.pendingIds = this.pendingIds.slice(1)
+      const deadlines = { ...this.pendingAutoCompleteAt }
+      delete deadlines[id]
+      this.pendingAutoCompleteAt = deadlines
       this.cardVisible = this.pendingIds.length > 0
       await this.persist(false)
     },
     showPendingCard() {
       if (this.pendingIds.length) this.cardVisible = true
     },
-    triggerDebugReminder(id: ReminderId) {
+    triggerDebugReminder(id: ReminderId, now = new Date()) {
       this.pendingIds = [id, ...this.pendingIds.filter((pendingId) => pendingId !== id)]
+      this.pendingAutoCompleteAt = { ...this.pendingAutoCompleteAt, [id]: createReminderAutoCompleteAt(now) }
       this.cardVisible = true
     },
     hidePendingCard() {
@@ -166,6 +223,7 @@ export const useHealthStore = defineStore('health', {
     async resetSettings() {
       this.settings = createDefaultHealthSettings()
       this.pendingIds = []
+      this.pendingAutoCompleteAt = {}
       this.cardVisible = false
       await this.persist()
     },

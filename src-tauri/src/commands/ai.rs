@@ -3,13 +3,16 @@ use std::path::{Path, PathBuf};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 use serde_json::Value;
-use tauri::WebviewWindow;
+use tauri::{Manager, WebviewWindow};
+use tauri_plugin_store::StoreExt;
 
 use crate::ai::{client, config, DEEPSEEK_MODELS};
 
 const MAX_SPREADSHEET_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_REPORT_BYTES: usize = 24 * 1024 * 1024;
 const PANEL_WINDOW: &str = "panel-window";
+const AI_CREDENTIAL_STATE_STORE: &str = "ai-credential-state.json";
+const AI_CREDENTIAL_CONFIGURED: &str = "aiCredentialConfigured";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,15 +62,33 @@ fn ensure_panel_window(window: &WebviewWindow) -> Result<(), String> {
         .ok_or_else(|| "ai_command_forbidden".to_owned())
 }
 
+fn credential_configured(window: &WebviewWindow) -> bool {
+    window
+        .app_handle()
+        .store(AI_CREDENTIAL_STATE_STORE)
+        .ok()
+        .and_then(|store| store.get(AI_CREDENTIAL_CONFIGURED))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+fn set_credential_configured(window: &WebviewWindow, configured: bool) -> Result<(), String> {
+    let store = window
+        .app_handle()
+        .store(AI_CREDENTIAL_STATE_STORE)
+        .map_err(|_| "ai_secure_storage_write_failed".to_owned())?;
+    store.set(AI_CREDENTIAL_CONFIGURED, configured);
+    store
+        .save()
+        .map_err(|_| "ai_secure_storage_write_failed".to_owned())
+}
+
 #[tauri::command]
 pub async fn ai_status(window: WebviewWindow) -> Result<AiStatus, String> {
     ensure_panel_window(&window)?;
-    let has_api_key = tauri::async_runtime::spawn_blocking(config::has_api_key)
-        .await
-        .map_err(|_| "ai_secure_storage_unavailable".to_owned())??;
     Ok(AiStatus {
         provider: "deepseek",
-        has_api_key,
+        has_api_key: credential_configured(&window),
         models: DEEPSEEK_MODELS,
     })
 }
@@ -77,7 +98,8 @@ pub async fn ai_save_api_key(window: WebviewWindow, api_key: String) -> Result<(
     ensure_panel_window(&window)?;
     tauri::async_runtime::spawn_blocking(move || config::save_api_key(api_key))
         .await
-        .map_err(|_| "ai_secure_storage_write_failed".to_owned())?
+        .map_err(|_| "ai_secure_storage_write_failed".to_owned())??;
+    set_credential_configured(&window, true)
 }
 
 #[tauri::command]
@@ -85,7 +107,8 @@ pub async fn ai_delete_api_key(window: WebviewWindow) -> Result<(), String> {
     ensure_panel_window(&window)?;
     tauri::async_runtime::spawn_blocking(config::delete_api_key)
         .await
-        .map_err(|_| "ai_secure_storage_delete_failed".to_owned())?
+        .map_err(|_| "ai_secure_storage_delete_failed".to_owned())??;
+    set_credential_configured(&window, false)
 }
 
 #[tauri::command]

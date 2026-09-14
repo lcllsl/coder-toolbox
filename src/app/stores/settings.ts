@@ -6,6 +6,7 @@ import { useHealthStore } from '@/app/stores/health'
 import { usePanelStore } from '@/app/stores/panel'
 import { useQuickActionsStore } from '@/app/stores/quick-actions'
 import { useVaultStore } from '@/app/stores/vault'
+import { clearSavedChartProjects } from '@/features/ai-office/smart-chart/repositories/saved-chart-repository'
 import { clearAllSettings, createDefaultAppSettings, loadAppSettings, normalizeVaultAutoLockMinutes, saveAppSettings, shouldConfigureVaultAutoLock } from '@/features/settings/repositories/app-settings-repository'
 import type { AiModel, AppMode, AppSettings, DoubleClickAction } from '@/features/settings/types'
 import { getAppWindowLabel, isTauriRuntime } from '@/services/tauri/runtime'
@@ -96,6 +97,7 @@ export const useSettingsStore = defineStore('settings', {
         health.clearStatistics(),
         files.clearAllTransfers(),
         quick.clearRecent(),
+        clearSavedChartProjects(),
       ])
       if (!resetSettings) return
 
