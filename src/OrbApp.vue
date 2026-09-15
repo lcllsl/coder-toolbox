@@ -36,7 +36,6 @@ const DRAG_THRESHOLD = 5
 const EDGE_COLLAPSE_DELAY = 3_000
 const OPEN_DURATION = 430
 const CLOSE_DURATION = 300
-const PANEL_BLUR_GUARD_DURATION = 250
 
 interface DragSession {
   pointerId: number
@@ -108,7 +107,6 @@ let reminderCardTimer: number | undefined
 let clickTimer: number | undefined
 let lastHealthTickAt = Date.now()
 let suppressClickUntil = 0
-let panelHiddenAt = Number.NEGATIVE_INFINITY
 
 function clearTransitionTimer() {
   if (transitionTimer !== undefined) window.clearTimeout(transitionTimer)
@@ -288,7 +286,6 @@ async function handleOrbClick() {
     return
   }
   if (orbStore.uiState === 'panel-hidden') {
-    if (performance.now() - panelHiddenAt < PANEL_BLUR_GUARD_DURATION) return
     orbStore.transitionTo('panel-opening')
     try {
       await restorePanel()
@@ -469,7 +466,6 @@ function handlePanelVisibility(visible: boolean) {
     return
   }
 
-  panelHiddenAt = performance.now()
   if (orbStore.uiState === 'panel-open') orbStore.transitionTo('panel-closing')
   if (orbStore.uiState === 'panel-closing') orbStore.transitionTo('panel-hidden')
 }

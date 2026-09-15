@@ -146,32 +146,9 @@ test('orb hides and restores the active panel without reopening category petals'
   await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
   await expect(page.locator('.petal')).toHaveCount(0)
 
-  await page.waitForTimeout(300)
   await orb.click()
   await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
   await expect(page.locator('.petal')).toHaveCount(0)
-})
-
-test('panel blur immediately before an orb click does not reopen the panel', async ({ page }) => {
-  await page.setViewportSize({ width: 340, height: 340 })
-  await page.goto('/?window=orb')
-  const orb = page.locator('.orb-button')
-
-  await orb.click()
-  await page.waitForTimeout(500)
-  await page.getByRole('button', { name: 'AI 办公' }).click()
-  await expect(page.locator('.orb-stage')).toHaveClass(/(?:^|\s)state-panel-open(?:\s|$)/)
-
-  await page.evaluate(() => {
-    window.dispatchEvent(new CustomEvent('orb:panel-visibility', { detail: { visible: false } }))
-  })
-  await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
-  await orb.click()
-  await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
-
-  await page.waitForTimeout(300)
-  await orb.click()
-  await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
 })
 
 test('panel preview mounts its lightweight shell', async ({ page }) => {
@@ -196,10 +173,16 @@ test('panel hide control preserves the current view for restoration', async ({ p
   await expect(input).toHaveValue('保留当前面板内容')
 })
 
-test('panel hides when its window loses focus', async ({ page }) => {
+test('panel remains visible and keeps input when its window loses focus', async ({ page }) => {
   await page.goto('/?window=panel')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'clipboard' } }))
+  })
+  const search = page.getByRole('searchbox', { name: '搜索剪贴板' })
+  await search.fill('跨窗口复制粘贴')
   await page.evaluate(() => window.dispatchEvent(new Event('blur')))
-  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-hidden', 'true')
+  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-hidden', 'false')
+  await expect(search).toHaveValue('跨窗口复制粘贴')
 })
 
 test('AI office turns a local spreadsheet into an interactive report', async ({ page }) => {

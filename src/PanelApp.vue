@@ -131,10 +131,6 @@ function handlePreviewHide() {
   previewHidden.value = true
 }
 
-function handleWindowBlur() {
-  void hideCurrentPanel()
-}
-
 onMounted(async () => {
   await panelStore.initialize()
   await clipboardStore.initialize(false)
@@ -148,7 +144,6 @@ onMounted(async () => {
   })
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('panel:preview-close', handlePreviewClose)
-  window.addEventListener('blur', handleWindowBlur)
   unlistenPreviewHide = onPanelPreviewHide(handlePreviewHide)
 })
 
@@ -158,7 +153,6 @@ onUnmounted(() => {
   unlistenPreviewHide?.()
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('panel:preview-close', handlePreviewClose)
-  window.removeEventListener('blur', handleWindowBlur)
 })
 </script>
 
