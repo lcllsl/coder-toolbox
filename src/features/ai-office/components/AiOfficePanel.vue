@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { defineAsyncComponent, ref } from 'vue'
-import { ChartSpline, ChevronRight, FileText, ShieldCheck, Sparkles, TableProperties } from '@lucide/vue'
+import { ChartSpline, ChevronRight, FileText, FolderTree, ShieldCheck, Sparkles, TableProperties } from '@lucide/vue'
 
 import type { TabularDataset } from '../smart-chart/types'
 
-const activeTool = ref<'home' | 'smart-chart' | 'smart-table'>('home')
+const activeTool = ref<'home' | 'smart-chart' | 'smart-table' | 'smart-files'>('home')
 const chartDataset = ref<TabularDataset>()
 const SmartChartStudio = defineAsyncComponent(() => import('../smart-chart/components/SmartChartStudio.vue'))
 const SmartTableStudio = defineAsyncComponent(() => import('../smart-table/components/SmartTableStudio.vue'))
+const SmartFileOrganizer = defineAsyncComponent(() => import('../smart-file-organizer/components/SmartFileOrganizer.vue'))
 
 function openSmartChart(dataset?: TabularDataset) {
   chartDataset.value = dataset
@@ -24,11 +25,13 @@ function returnHome() {
   <div class="ai-office-root">
     <SmartChartStudio v-if="activeTool === 'smart-chart'" :initial-dataset="chartDataset" @back="returnHome" />
     <SmartTableStudio v-else-if="activeTool === 'smart-table'" @back="returnHome" @chart="openSmartChart" />
+    <SmartFileOrganizer v-else-if="activeTool === 'smart-files'" @back="returnHome" />
     <section v-else class="ai-office-panel">
       <header class="ai-intro"><span class="ai-orbit" aria-hidden="true"><Sparkles :size="26" /></span><div><span class="status-pill">AI 办公</span><h2>从杂乱信息到结构化数据与图表</h2><p>整理文字、解析表格，并生成可编辑、可导出、可继续分析的数据结果。</p></div></header>
       <div class="feature-grid">
         <button class="hero-card" type="button" @click="activeTool = 'smart-table'"><span class="feature-icon"><TableProperties :size="28" /></span><span class="feature-copy"><span class="feature-heading"><strong>智能表格</strong><em>已上线</em></span><span>把聊天记录、名单、事项或其他文字整理成可编辑表格。</span><small><ShieldCheck :size="13" /> 默认隐私保护，两阶段识别，不持久化原始文本</small></span><ChevronRight class="chart-mark" :size="25" aria-hidden="true" /></button>
         <button class="hero-card" type="button" @click="openSmartChart()"><span class="feature-icon"><ChartSpline :size="28" /></span><span class="feature-copy"><span class="feature-heading"><strong>Excel 智能图表</strong><em>已上线</em></span><span>导入 XLSX、XLS 或 CSV，生成 KPI 与可交互图表。</span><small><ShieldCheck :size="13" /> 文件不上传，敏感样例默认脱敏</small></span><ChevronRight class="chart-mark" :size="25" aria-hidden="true" /></button>
+        <button class="hero-card" type="button" @click="activeTool = 'smart-files'"><span class="feature-icon"><FolderTree :size="28" /></span><span class="feature-copy"><span class="feature-heading"><strong>智能文件整理</strong><em>已上线</em></span><span>扫描文件信息，自动规划目录并整理归档。</span><small><ShieldCheck :size="13" /> 不读正文、不覆盖，可撤销当前任务</small></span><ChevronRight class="chart-mark" :size="25" aria-hidden="true" /></button>
       </div>
       <div class="future-grid"><article><span><FileText :size="21" /></span><div><strong>文档助手</strong><small>规划中</small></div></article></div>
     </section>

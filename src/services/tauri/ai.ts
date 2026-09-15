@@ -3,6 +3,7 @@ import { save } from '@tauri-apps/plugin-dialog'
 
 import type { DataProfile } from '@/features/ai-office/smart-chart/types'
 import type { SmartTableSchema, SmartTableSourceBlock } from '@/features/ai-office/smart-table/types'
+import type { AiDimension, ClassificationDictionary, FileAiMeta } from '@/features/ai-office/smart-file-organizer/types'
 import { isTauriRuntime } from './runtime'
 
 export interface AiStatus {
@@ -63,6 +64,17 @@ export async function extractSmartTableRows(
 ): Promise<unknown> {
   if (!isTauriRuntime()) throw new Error('ai_api_key_missing')
   return invoke<unknown>('ai_extract_table_rows', { model, schema, sourceBlocks, validationReason })
+}
+
+export async function classifyOrganizerFiles(
+  model: string,
+  enabledDimensions: AiDimension[],
+  allowedValues: ClassificationDictionary,
+  files: FileAiMeta[],
+  validationReason?: string,
+): Promise<unknown> {
+  if (!isTauriRuntime()) throw new Error('ai_api_key_missing')
+  return invoke<unknown>('ai_classify_organizer_files', { model, enabledDimensions, allowedValues, files, validationReason })
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

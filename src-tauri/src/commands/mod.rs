@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod clipboard;
+pub mod file_organizer;
 pub mod files;
 pub mod quick_actions;
 pub mod settings;

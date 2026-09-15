@@ -16,6 +16,44 @@ const MAX_SMART_TABLE_EXPORT_BYTES: usize = 24 * 1024 * 1024;
 const PANEL_WINDOW: &str = "panel-window";
 const AI_SERVICE_FILE: &str = "ai-service.json";
 
+fn restricted_organizer_files(files: Value) -> Result<Value, String> {
+    const ALLOWED: [&str; 7] = [
+        "id",
+        "name",
+        "extension",
+        "parentFolder",
+        "createdAt",
+        "modifiedAt",
+        "size",
+    ];
+    let items = files
+        .as_array()
+        .ok_or_else(|| "file_classification_input_invalid".to_owned())?;
+    if items.is_empty() || items.len() > 80 {
+        return Err("file_classification_input_invalid".to_owned());
+    }
+    let mut restricted = Vec::with_capacity(items.len());
+    for item in items {
+        let object = item
+            .as_object()
+            .ok_or_else(|| "file_classification_input_invalid".to_owned())?;
+        if object.get("id").and_then(Value::as_str).is_none()
+            || object.get("name").and_then(Value::as_str).is_none()
+            || object.get("extension").and_then(Value::as_str).is_none()
+        {
+            return Err("file_classification_input_invalid".to_owned());
+        }
+        let mut clean = serde_json::Map::new();
+        for key in ALLOWED {
+            if let Some(value) = object.get(key) {
+                clean.insert(key.to_owned(), value.clone());
+            }
+        }
+        restricted.push(Value::Object(clean));
+    }
+    Ok(Value::Array(restricted))
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AiServiceData {
@@ -235,6 +273,29 @@ pub async fn ai_extract_table_rows(
 }
 
 #[tauri::command]
+pub async fn ai_classify_organizer_files(
+    window: WebviewWindow,
+    model: String,
+    enabled_dimensions: Value,
+    allowed_values: Value,
+    files: Value,
+    validation_reason: Option<String>,
+) -> Result<Value, String> {
+    ensure_panel_window(&window)?;
+    let api_key = load_api_key(&window)?;
+    let files = restricted_organizer_files(files)?;
+    client::classify_organizer_files(
+        &api_key,
+        &model,
+        &enabled_dimensions,
+        &allowed_values,
+        &files,
+        validation_reason.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn write_smart_table_export(
     window: WebviewWindow,
     path: String,
@@ -331,7 +392,11 @@ pub fn open_report_html(window: WebviewWindow, path: String, reveal: bool) -> Re
 
 #[cfg(test)]
 mod tests {
-    use super::{is_supported_spreadsheet, validated_html_path, validated_smart_table_path};
+    use super::{
+        is_supported_spreadsheet, restricted_organizer_files, validated_html_path,
+        validated_smart_table_path,
+    };
+    use serde_json::json;
     use std::path::Path;
 
     #[test]
@@ -367,5 +432,17 @@ mod tests {
             validated_smart_table_path(&temp_dir.join("result.exe").to_string_lossy(), "exe")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn organizer_ai_payload_drops_absolute_paths_and_unknown_fields() {
+        let value = restricted_organizer_files(json!([{
+            "id": "file-1", "name": "预算.xlsx", "extension": ".xlsx", "parentFolder": "资料",
+            "absolutePath": "C:\\Users\\secret\\预算.xlsx", "content": "never send"
+        }]))
+        .unwrap();
+        assert!(value[0].get("absolutePath").is_none());
+        assert!(value[0].get("content").is_none());
+        assert_eq!(value[0]["parentFolder"], "资料");
     }
 }

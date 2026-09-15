@@ -229,6 +229,46 @@ pub async fn extract_table_rows(
     request_json(api_key, model, &system, &user, 6000).await
 }
 
+pub async fn classify_organizer_files(
+    api_key: &str,
+    model: &str,
+    enabled_dimensions: &Value,
+    allowed_values: &Value,
+    files: &Value,
+    validation_reason: Option<&str>,
+) -> Result<Value, String> {
+    let dimensions_json = serde_json::to_string(enabled_dimensions)
+        .map_err(|_| "file_classification_input_invalid")?;
+    let dictionaries_json =
+        serde_json::to_string(allowed_values).map_err(|_| "file_classification_input_invalid")?;
+    let files_json =
+        serde_json::to_string(files).map_err(|_| "file_classification_input_invalid")?;
+    if files_json.len() > 192 * 1024 || dictionaries_json.len() > 32 * 1024 {
+        return Err("file_classification_input_too_large".to_owned());
+    }
+    let correction = match validation_reason {
+        Some("file_classification_schema_invalid") => {
+            "\n上次输出结构不符合合同，请只输出合法 JSON 并补齐必填字段。"
+        }
+        Some("file_classification_unknown_id") => {
+            "\n上次输出包含未知或重复 fileId，请只使用输入中真实且唯一的 fileId。"
+        }
+        _ => "",
+    };
+    let system = format!(
+        r#"你是“冒泡智能文件整理”的文件分类规划引擎。只能根据输入的文件名、扩展名、当前父目录名称、创建时间、修改时间和大小生成分类建议。你看不到也不得假设文件正文、二进制或完整绝对路径。
+
+禁止修改文件名、返回路径或文件移动命令、输出 Shell、编造文件或正文信息。无法可靠判断时必须返回 null；宁缺毋滥。若提供 allowedValues，相应分类只能从白名单选择。confidence 只能是 high、medium、low，reason 最多一句简短依据。只能使用输入中真实 fileId。
+
+只能输出严格 JSON，不要 Markdown 或额外字段：
+{{"version":1,"items":[{{"fileId":"file-00001","categories":{{"department":null,"person":null,"project":null,"documentType":null,"topic":null}},"confidence":"low","reason":"文件名没有明确线索"}}]}}{correction}"#
+    );
+    let user = format!(
+        "启用维度：{dimensions_json}\n分类字典：{dictionaries_json}\n文件有限元信息：{files_json}"
+    );
+    request_json(api_key, model, &system, &user, 5_000).await
+}
+
 fn report_spec_example(profile: &Value) -> Result<String, String> {
     let columns = profile
         .get("columns")

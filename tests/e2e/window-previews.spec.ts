@@ -146,7 +146,7 @@ test('AI office turns a local spreadsheet into an interactive report', async ({ 
   })
   await expect(page.getByRole('heading', { name: 'AI 办公', exact: true })).toBeVisible()
   await expect(page.getByText('Excel 智能图表', { exact: true })).toBeVisible()
-  await expect(page.getByText('已上线', { exact: true })).toHaveCount(2)
+  await expect(page.getByText('已上线', { exact: true })).toHaveCount(3)
   await page.getByRole('button', { name: /Excel 智能图表/ }).click()
   await expect(page.getByRole('heading', { name: '已保存的图表' })).toBeVisible()
   await page.getByRole('button', { name: '新建图表', exact: true }).click()
@@ -194,6 +194,20 @@ test('AI office turns a local spreadsheet into an interactive report', async ({ 
   await page.getByRole('button', { name: /华东销售看板.*演示销售数据/ }).click()
   await expect(page.getByText(/已保存图表 · Sheet1 · 6 行数据/)).toBeVisible()
   await expect(page.getByLabel('营业收入字段名称')).toBeVisible()
+})
+
+test('AI office exposes the smart file organizer safety-first intake', async ({ page }) => {
+  await page.setViewportSize({ width: 1040, height: 760 })
+  await page.goto('/?window=panel')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'ai-office' } }))
+  })
+  await page.getByRole('button', { name: /智能文件整理/ }).click()
+  await expect(page.getByRole('heading', { name: '智能文件整理', exact: true })).toBeVisible()
+  await expect(page.getByText('当前尚未选择目录')).toBeVisible()
+  await expect(page.getByRole('button', { name: '选择目录' })).toBeVisible()
+  await expect(page.getByText('目录', { exact: true })).toBeVisible()
+  await page.screenshot({ path: 'test-results/smart-file-organizer-intake.png' })
 })
 
 test('AI office smart table exposes guarded text intake and templates', async ({ page }) => {

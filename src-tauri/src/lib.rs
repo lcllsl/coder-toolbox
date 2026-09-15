@@ -10,6 +10,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(commands::file_organizer::FileOrganizerState::default())
         .manage(Arc::new(vault::state::VaultState::default()))
         .manage(Arc::new(
             vault::clipboard::SensitiveClipboardState::default(),
@@ -108,6 +109,7 @@ pub fn run() {
             commands::ai::ai_generate_chart_plan,
             commands::ai::ai_detect_table_schema,
             commands::ai::ai_extract_table_rows,
+            commands::ai::ai_classify_organizer_files,
             commands::ai::write_smart_table_export,
             commands::ai::read_spreadsheet_file,
             commands::ai::write_report_html,
@@ -121,6 +123,11 @@ pub fn run() {
             commands::files::copy_to_temporary_transfer,
             commands::files::delete_temporary_transfer_copy,
             commands::files::open_temporary_transfer_copy,
+            commands::file_organizer::scan_organizer_directory,
+            commands::file_organizer::execute_file_organize,
+            commands::file_organizer::cancel_file_organize,
+            commands::file_organizer::validate_organizer_plan,
+            commands::file_organizer::undo_file_organize,
             commands::quick_actions::open_external_url,
             commands::quick_actions::application_status,
             commands::quick_actions::open_application,
