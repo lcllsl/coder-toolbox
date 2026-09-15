@@ -11,6 +11,7 @@ export type OrbUiState =
   | 'panel-opening'
   | 'panel-open'
   | 'panel-closing'
+  | 'panel-hidden'
   | 'reminder'
 
 const allowedTransitions: Record<OrbUiState, readonly OrbUiState[]> = {
@@ -19,9 +20,10 @@ const allowedTransitions: Record<OrbUiState, readonly OrbUiState[]> = {
   'petals-opening': ['petals-open', 'petals-closing'],
   'petals-open': ['petals-closing', 'panel-opening', 'dragging'],
   'petals-closing': ['idle', 'petals-opening'],
-  'panel-opening': ['panel-open', 'petals-open'],
+  'panel-opening': ['panel-open', 'panel-hidden', 'petals-open'],
   'panel-open': ['panel-closing'],
-  'panel-closing': ['idle', 'petals-opening'],
+  'panel-closing': ['idle', 'panel-open', 'panel-hidden', 'petals-opening'],
+  'panel-hidden': ['panel-opening'],
   reminder: ['idle', 'petals-opening'],
 }
 

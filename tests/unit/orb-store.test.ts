@@ -20,4 +20,16 @@ describe('orb state machine', () => {
     expect(store.transitionTo('panel-open')).toBe(false)
     expect(store.uiState).toBe('idle')
   })
+
+  it('tracks hiding and restoring the current panel without returning to idle', () => {
+    const store = useOrbStore()
+
+    expect(store.transitionTo('panel-opening')).toBe(true)
+    expect(store.transitionTo('panel-open')).toBe(true)
+    expect(store.transitionTo('panel-closing')).toBe(true)
+    expect(store.transitionTo('panel-hidden')).toBe(true)
+    expect(store.transitionTo('panel-opening')).toBe(true)
+    expect(store.transitionTo('panel-open')).toBe(true)
+    expect(store.uiState).toBe('panel-open')
+  })
 })

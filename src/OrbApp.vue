@@ -16,11 +16,13 @@ import { onClipboardSettingsChanged } from '@/services/tauri/clipboard'
 import { onAppSettingsChanged, onGlobalShortcut, onTrayModeRequested, updateTrayMode } from '@/services/tauri/settings'
 import type { AppMode } from '@/features/settings/types'
 import {
-  closePanel,
   getOrbPosition,
+  hidePanel,
   moveOrbTo,
   onOrbPanelClosed,
+  onOrbPanelVisibilityChanged,
   openPanel,
+  restorePanel,
   setOrbEdgeCollapsed,
   setOrbExpanded,
   snapOrbToEdge,
@@ -34,6 +36,7 @@ const DRAG_THRESHOLD = 5
 const EDGE_COLLAPSE_DELAY = 3_000
 const OPEN_DURATION = 430
 const CLOSE_DURATION = 300
+const PANEL_BLUR_GUARD_DURATION = 250
 
 interface DragSession {
   pointerId: number
@@ -73,9 +76,10 @@ const hitRegions = computed(() => [
 const expanded = computed(() =>
   ['petals-opening', 'petals-open', 'petals-closing', 'panel-opening'].includes(orbStore.uiState),
 )
-const panelOpen = computed(() =>
+const panelVisible = computed(() =>
   ['panel-opening', 'panel-open', 'panel-closing'].includes(orbStore.uiState),
 )
+const panelHidden = computed(() => orbStore.uiState === 'panel-hidden')
 const reminderCountdownSeconds = ref(REMINDER_AUTO_COMPLETE_SECONDS)
 const stageStyle = computed(() => ({
   '--orb-x': `${geometry.value.orbX}px`,
@@ -89,6 +93,7 @@ let edgeTimer: number | undefined
 let transitionTimer: number | undefined
 let stopHitTest: (() => Promise<void>) | undefined
 let unlistenPanelClosed: (() => void) | undefined
+let unlistenPanelVisibility: (() => void) | undefined
 let unlistenHealthSettings: (() => void) | undefined
 let unlistenHealthDebug: (() => void) | undefined
 let unlistenClipboardSettings: (() => void) | undefined
@@ -102,6 +107,8 @@ let healthTimer: number | undefined
 let reminderCardTimer: number | undefined
 let clickTimer: number | undefined
 let lastHealthTickAt = Date.now()
+let suppressClickUntil = 0
+let panelHiddenAt = Number.NEGATIVE_INFINITY
 
 function clearTransitionTimer() {
   if (transitionTimer !== undefined) window.clearTimeout(transitionTimer)
@@ -269,13 +276,30 @@ async function closePetals() {
 }
 
 async function handleOrbClick() {
-  if (orbStore.isTransitioning || orbStore.uiState === 'dragging') return
-
   if (orbStore.uiState === 'panel-open') {
     orbStore.transitionTo('panel-closing')
-    await closePanel(false)
+    try {
+      await hidePanel()
+      if (orbStore.uiState === 'panel-closing') orbStore.transitionTo('panel-hidden')
+    } catch (error) {
+      orbStore.transitionTo('panel-open')
+      console.error('Unable to hide panel window', error)
+    }
     return
   }
+  if (orbStore.uiState === 'panel-hidden') {
+    if (performance.now() - panelHiddenAt < PANEL_BLUR_GUARD_DURATION) return
+    orbStore.transitionTo('panel-opening')
+    try {
+      await restorePanel()
+      if (orbStore.uiState === 'panel-opening') orbStore.transitionTo('panel-open')
+    } catch (error) {
+      orbStore.transitionTo('panel-hidden')
+      console.error('Unable to restore panel window', error)
+    }
+    return
+  }
+  if (orbStore.isTransitioning || orbStore.uiState === 'dragging') return
   if (orbStore.uiState === 'petals-open') {
     await closePetals()
     return
@@ -305,6 +329,15 @@ async function handleOrbTap() {
     clickTimer = undefined
     void handleOrbClick()
   }, 280)
+}
+
+async function handleOrbActivation(event: MouseEvent) {
+  if (performance.now() < suppressClickUntil) return
+  if (event.detail === 0) {
+    await handleOrbClick()
+    return
+  }
+  await handleOrbTap()
 }
 
 async function applyRuntimeMode(mode: AppMode) {
@@ -396,15 +429,24 @@ async function handlePointerEnd(event: PointerEvent) {
   const didDrag = dragSession.dragging
   dragSession = null
   ;(event.currentTarget as HTMLElement | null)?.releasePointerCapture(event.pointerId)
-  if (!didDrag) {
-    await handleOrbTap()
-    return
-  }
+  if (!didDrag) return
 
+  suppressClickUntil = performance.now() + 150
   const snap = await snapOrbToEdge()
   orbStore.setSnappedEdge(snap.edge)
   orbStore.transitionTo('idle')
   scheduleEdgeCollapse()
+}
+
+function handlePointerCancel(event: PointerEvent) {
+  if (!dragSession || dragSession.pointerId !== event.pointerId) return
+  const didDrag = dragSession.dragging
+  dragSession = null
+  ;(event.currentTarget as HTMLElement | null)?.releasePointerCapture(event.pointerId)
+  if (didDrag) {
+    orbStore.transitionTo('idle')
+    scheduleEdgeCollapse()
+  }
 }
 
 async function handlePanelClosed(reopenPetals: boolean) {
@@ -416,6 +458,20 @@ async function handlePanelClosed(reopenPetals: boolean) {
     if (healthStore.cardVisible) await openReminderCard()
     else scheduleEdgeCollapse()
   }
+}
+
+function handlePanelVisibility(visible: boolean) {
+  if (visible) {
+    if (orbStore.uiState === 'idle' || orbStore.uiState === 'panel-hidden') {
+      orbStore.transitionTo('panel-opening')
+    }
+    if (orbStore.uiState === 'panel-opening') orbStore.transitionTo('panel-open')
+    return
+  }
+
+  panelHiddenAt = performance.now()
+  if (orbStore.uiState === 'panel-open') orbStore.transitionTo('panel-closing')
+  if (orbStore.uiState === 'panel-closing') orbStore.transitionTo('panel-hidden')
 }
 
 function handleWindowBlur() {
@@ -431,6 +487,7 @@ onMounted(async () => {
     if (debugReminderId) healthStore.triggerDebugReminder(debugReminderId)
     void handlePanelClosed(reopenPetals)
   })
+  unlistenPanelVisibility = await onOrbPanelVisibilityChanged(handlePanelVisibility)
   const initialSnap = await snapOrbToEdge()
   orbStore.setSnappedEdge(initialSnap.edge)
   scheduleEdgeCollapse()
@@ -465,6 +522,7 @@ onUnmounted(() => {
   if (healthTimer !== undefined) window.clearInterval(healthTimer)
   void disableExpandedHitTest()
   unlistenPanelClosed?.()
+  unlistenPanelVisibility?.()
   unlistenHealthSettings?.()
   unlistenHealthDebug?.()
   unlistenClipboardSettings?.()
@@ -520,13 +578,15 @@ onUnmounted(() => {
     <div class="orb-position">
       <OrbButton
         :expanded="expanded"
-        :panel-open="panelOpen"
+        :panel-visible="panelVisible"
+        :panel-hidden="panelHidden"
         :reminder-active="healthStore.pendingCount > 0"
         :mode="settingsStore.settings.mode"
-        @keyboard-activate="handleOrbClick"
+        @orb-activate="handleOrbActivation"
         @pointer-start="handlePointerStart"
         @pointer-move="handlePointerMove"
         @pointer-end="handlePointerEnd"
+        @pointer-cancel="handlePointerCancel"
       />
     </div>
   </main>

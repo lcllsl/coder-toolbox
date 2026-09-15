@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { X } from '@lucide/vue'
+import { EyeOff, PanelTopOpen } from '@lucide/vue'
 import maopaoIcon from '@/assets/branding/maopao-orb.png'
 import type { AppMode } from '@/features/settings/types'
 
 const props = defineProps<{
   expanded: boolean
-  panelOpen?: boolean
+  panelVisible?: boolean
+  panelHidden?: boolean
   reminderActive?: boolean
   mode?: AppMode
 }>()
 
 const label = computed(() => {
-  if (props.panelOpen) return '关闭功能面板'
+  if (props.panelHidden) return '恢复功能面板'
+  if (props.panelVisible) return '隐藏功能面板'
   if (props.reminderActive) return '查看健康提醒'
   if (props.expanded) return '收回冒泡'
   const suffix = props.mode === 'paused' ? '（完全暂停）' : props.mode === 'silent' ? '（静默模式）' : ''
@@ -20,10 +22,11 @@ const label = computed(() => {
 })
 
 const emit = defineEmits<{
-  keyboardActivate: []
+  orbActivate: [event: MouseEvent]
   pointerStart: [event: PointerEvent]
   pointerMove: [event: PointerEvent]
   pointerEnd: [event: PointerEvent]
+  pointerCancel: [event: PointerEvent]
 }>()
 </script>
 
@@ -31,15 +34,16 @@ const emit = defineEmits<{
   <button
     class="orb-button"
     type="button"
-    :aria-expanded="expanded"
+    :aria-expanded="expanded || panelVisible"
     :aria-label="label"
-    @click="$event.detail === 0 && emit('keyboardActivate')"
+    @click="emit('orbActivate', $event)"
     @pointerdown="emit('pointerStart', $event)"
     @pointermove="emit('pointerMove', $event)"
     @pointerup="emit('pointerEnd', $event)"
-    @pointercancel="emit('pointerEnd', $event)"
+    @pointercancel="emit('pointerCancel', $event)"
   >
-    <X v-if="panelOpen" :size="25" :stroke-width="1.9" aria-hidden="true" />
+    <EyeOff v-if="panelVisible" :size="25" :stroke-width="1.9" aria-hidden="true" />
+    <PanelTopOpen v-else-if="panelHidden" :size="25" :stroke-width="1.9" aria-hidden="true" />
     <img v-else class="orb-logo" :src="maopaoIcon" alt="" aria-hidden="true" />
     <span v-if="reminderActive" class="reminder-dot" aria-hidden="true" />
     <span v-if="mode !== 'work'" class="mode-dot" :class="mode" aria-hidden="true" />

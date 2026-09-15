@@ -128,7 +128,50 @@ test('orb applies paused mode and distinguishes a configured double click', asyn
   await expect(page.locator('.mode-dot.paused')).toBeVisible()
   await expect(orb).toHaveCSS('width', '60px')
   await orb.dblclick({ delay: 80 })
-  await expect(page.getByRole('button', { name: '关闭功能面板' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
+})
+
+test('orb hides and restores the active panel without reopening category petals', async ({ page }) => {
+  await page.setViewportSize({ width: 340, height: 340 })
+  await page.goto('/?window=orb')
+  const orb = page.locator('.orb-button')
+
+  await orb.click()
+  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: 'AI 办公' }).click()
+  await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
+  await expect(page.locator('.orb-stage')).toHaveClass(/(?:^|\s)state-panel-open(?:\s|$)/)
+
+  await orb.click()
+  await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
+  await expect(page.locator('.petal')).toHaveCount(0)
+
+  await page.waitForTimeout(300)
+  await orb.click()
+  await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
+  await expect(page.locator('.petal')).toHaveCount(0)
+})
+
+test('panel blur immediately before an orb click does not reopen the panel', async ({ page }) => {
+  await page.setViewportSize({ width: 340, height: 340 })
+  await page.goto('/?window=orb')
+  const orb = page.locator('.orb-button')
+
+  await orb.click()
+  await page.waitForTimeout(500)
+  await page.getByRole('button', { name: 'AI 办公' }).click()
+  await expect(page.locator('.orb-stage')).toHaveClass(/(?:^|\s)state-panel-open(?:\s|$)/)
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('orb:panel-visibility', { detail: { visible: false } }))
+  })
+  await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
+  await orb.click()
+  await expect(page.getByRole('button', { name: '恢复功能面板' })).toBeVisible()
+
+  await page.waitForTimeout(300)
+  await orb.click()
+  await expect(page.getByRole('button', { name: '隐藏功能面板' })).toBeVisible()
 })
 
 test('panel preview mounts its lightweight shell', async ({ page }) => {
@@ -136,6 +179,27 @@ test('panel preview mounts its lightweight shell', async ({ page }) => {
   await page.goto('/?window=panel')
   await expect(page.getByRole('heading', { name: '效率工具', exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/panel-stage3.png', omitBackground: true })
+})
+
+test('panel hide control preserves the current view for restoration', async ({ page }) => {
+  await page.setViewportSize({ width: 1040, height: 760 })
+  await page.goto('/?window=panel')
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('panel:navigate', { detail: { category: 'ai-office' } }))
+  })
+  await page.getByRole('button', { name: /智能表格/ }).click()
+  const input = page.getByPlaceholder('把聊天记录、名单、事项或其他文字粘贴到这里')
+  await input.fill('保留当前面板内容')
+
+  await page.getByRole('button', { name: '隐藏面板' }).click()
+  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-hidden', 'true')
+  await expect(input).toHaveValue('保留当前面板内容')
+})
+
+test('panel hides when its window loses focus', async ({ page }) => {
+  await page.goto('/?window=panel')
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-hidden', 'true')
 })
 
 test('AI office turns a local spreadsheet into an interactive report', async ({ page }) => {
@@ -801,8 +865,8 @@ test('a due health reminder opens one card and completion updates statistics', a
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('petal-toolbox.reminder-logs') ?? '[]').length)).toBe(1)
 })
 
-test('Escape closes the panel without reopening petals', async ({ page }) => {
+test('Escape hides the panel without discarding its current view', async ({ page }) => {
   await page.goto('/?window=panel')
   await page.keyboard.press('Escape')
-  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-close', 'close')
+  await expect(page.locator('.panel-stage')).toHaveAttribute('data-preview-hidden', 'true')
 })

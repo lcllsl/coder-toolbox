@@ -17,7 +17,13 @@ import ClipboardPanel from '@/features/clipboard/components/ClipboardPanel.vue'
 import FilesPanel from '@/features/files/components/FilesPanel.vue'
 import QuickActionsPanel from '@/features/quick-actions/components/QuickActionsPanel.vue'
 import SettingsPanel from '@/features/settings/components/SettingsPanel.vue'
-import { closePanel, onPanelNavigate, showSettings } from '@/services/tauri/windows'
+import {
+  closePanel,
+  hidePanel,
+  onPanelNavigate,
+  onPanelPreviewHide,
+  showSettings,
+} from '@/services/tauri/windows'
 import { onClipboardHistoryChanged } from '@/services/tauri/clipboard'
 import {
   CATEGORY_LABELS,
@@ -41,6 +47,7 @@ const quickActions = useQuickActionsStore()
 const router = useRouter()
 const closing = ref(false)
 const previewCloseMode = ref('')
+const previewHidden = ref(false)
 const quickInitialView = ref<'overview' | 'tools'>('overview')
 const quickPanelKey = ref(0)
 const activeCategory = computed(() =>
@@ -61,6 +68,7 @@ const isFavorite = computed(() =>
 
 let unlisten: UnlistenFn | undefined
 let unlistenClipboardHistory: UnlistenFn | undefined
+let unlistenPreviewHide: UnlistenFn | undefined
 
 async function selectView(view: PanelView, quickView: 'overview' | 'tools' = 'overview') {
   if (view === 'quick-actions') {
@@ -87,6 +95,18 @@ async function finishPanel(reopenPetals: boolean) {
   }
 }
 
+async function hideCurrentPanel() {
+  if (closing.value) return
+  closing.value = true
+  try {
+    await hidePanel()
+  } finally {
+    window.setTimeout(() => {
+      closing.value = false
+    }, 240)
+  }
+}
+
 async function toggleFavorite() {
   const category = activeCategory.value
   if (!category) return
@@ -98,13 +118,21 @@ async function toggleFavorite() {
 function handleKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   event.preventDefault()
-  void finishPanel(false)
+  void hideCurrentPanel()
 }
 
 function handlePreviewClose(event: Event) {
   previewCloseMode.value = (event as CustomEvent<{ reopenPetals: boolean }>).detail.reopenPetals
     ? 'back'
     : 'close'
+}
+
+function handlePreviewHide() {
+  previewHidden.value = true
+}
+
+function handleWindowBlur() {
+  void hideCurrentPanel()
 }
 
 onMounted(async () => {
@@ -120,13 +148,17 @@ onMounted(async () => {
   })
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('panel:preview-close', handlePreviewClose)
+  window.addEventListener('blur', handleWindowBlur)
+  unlistenPreviewHide = onPanelPreviewHide(handlePreviewHide)
 })
 
 onUnmounted(() => {
   unlisten?.()
   unlistenClipboardHistory?.()
+  unlistenPreviewHide?.()
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('panel:preview-close', handlePreviewClose)
+  window.removeEventListener('blur', handleWindowBlur)
 })
 </script>
 
@@ -136,6 +168,7 @@ onUnmounted(() => {
     :class="{ closing }"
     :data-view="panelStore.activeView"
     :data-preview-close="previewCloseMode"
+    :data-preview-hidden="previewHidden"
   >
     <PanelShell
       :title="title"
@@ -145,7 +178,7 @@ onUnmounted(() => {
       :show-favorite="Boolean(activeCategory)"
       :show-settings="panelStore.activeView !== 'settings'"
       @back="finishPanel(true)"
-      @close="finishPanel(false)"
+      @hide="hideCurrentPanel"
       @settings="showSettings"
       @favorite="toggleFavorite"
     >

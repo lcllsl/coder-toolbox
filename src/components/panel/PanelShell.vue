@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Settings, Star, X } from '@lucide/vue'
+import { ArrowLeft, EyeOff, Settings, Star } from '@lucide/vue'
 
 import UiTooltip from '@/components/ui/UiTooltip.vue'
 
@@ -14,7 +14,7 @@ defineProps<{
 
 const emit = defineEmits<{
   back: []
-  close: []
+  hide: []
   settings: []
   favorite: []
 }>()
@@ -53,9 +53,9 @@ const emit = defineEmits<{
             <Settings :size="18" aria-hidden="true" />
           </button>
         </UiTooltip>
-        <UiTooltip text="关闭面板">
-          <button class="icon-button" type="button" aria-label="关闭面板" @click="emit('close')">
-            <X :size="19" aria-hidden="true" />
+        <UiTooltip text="隐藏面板">
+          <button class="icon-button" type="button" aria-label="隐藏面板" @click="emit('hide')">
+            <EyeOff :size="19" aria-hidden="true" />
           </button>
         </UiTooltip>
       </div>

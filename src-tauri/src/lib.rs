@@ -142,6 +142,8 @@ pub fn run() {
             commands::vault::vault_reset,
             commands::windows::open_panel,
             commands::windows::close_panel,
+            commands::windows::hide_panel,
+            commands::windows::restore_panel,
             commands::windows::trigger_health_debug_reminder,
             commands::windows::hide_orb,
             commands::windows::show_settings,

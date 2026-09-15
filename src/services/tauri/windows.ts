@@ -10,6 +10,8 @@ import { isTauriRuntime } from './runtime'
 
 const PANEL_NAVIGATE_EVENT = 'panel:navigate'
 const ORB_PANEL_CLOSED_EVENT = 'orb:panel-closed'
+const ORB_PANEL_VISIBILITY_EVENT = 'orb:panel-visibility'
+const PANEL_PREVIEW_HIDE_EVENT = 'panel:preview-hide'
 
 export async function openPanel(category: NavigablePanelCategory): Promise<void> {
   if (!isTauriRuntime()) {
@@ -30,6 +32,23 @@ export async function closePanel(reopenPetals = false): Promise<void> {
     return
   }
   await invoke('close_panel', { reopenPetals })
+}
+
+export async function hidePanel(): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.dispatchEvent(new Event(PANEL_PREVIEW_HIDE_EVENT))
+    window.dispatchEvent(new CustomEvent(ORB_PANEL_VISIBILITY_EVENT, { detail: { visible: false } }))
+    return
+  }
+  await invoke('hide_panel')
+}
+
+export async function restorePanel(): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.dispatchEvent(new CustomEvent(ORB_PANEL_VISIBILITY_EVENT, { detail: { visible: true } }))
+    return
+  }
+  await invoke('restore_panel')
 }
 
 export async function hideOrb(): Promise<void> {
@@ -144,6 +163,28 @@ export async function onOrbPanelClosed(
   return listen<{ reopenPetals: boolean; debugReminderId?: ReminderId }>(ORB_PANEL_CLOSED_EVENT, (event) => {
     handler(event.payload.reopenPetals, event.payload.debugReminderId)
   })
+}
+
+export async function onOrbPanelVisibilityChanged(
+  handler: (visible: boolean) => void,
+): Promise<UnlistenFn> {
+  if (isTauriRuntime()) {
+    return listen<{ visible: boolean }>(ORB_PANEL_VISIBILITY_EVENT, (event) => {
+      handler(event.payload.visible)
+    })
+  }
+
+  const listener = (event: Event) => {
+    handler((event as CustomEvent<{ visible: boolean }>).detail.visible)
+  }
+  window.addEventListener(ORB_PANEL_VISIBILITY_EVENT, listener)
+  return () => window.removeEventListener(ORB_PANEL_VISIBILITY_EVENT, listener)
+}
+
+export function onPanelPreviewHide(handler: () => void): UnlistenFn {
+  if (isTauriRuntime()) return () => undefined
+  window.addEventListener(PANEL_PREVIEW_HIDE_EVENT, handler)
+  return () => window.removeEventListener(PANEL_PREVIEW_HIDE_EVENT, handler)
 }
 
 export interface CursorEventGate {

@@ -11,6 +11,7 @@ const ORB_WINDOW: &str = "orb-window";
 const PANEL_WINDOW: &str = "panel-window";
 const PANEL_NAVIGATE_EVENT: &str = "panel:navigate";
 const ORB_PANEL_CLOSED_EVENT: &str = "orb:panel-closed";
+const ORB_PANEL_VISIBILITY_EVENT: &str = "orb:panel-visibility";
 const COLLAPSED_ORB_SIZE: f64 = 88.0;
 const EXPANDED_ORB_SIZE: f64 = 340.0;
 const EDGE_MARGIN: f64 = 12.0;
@@ -26,6 +27,12 @@ struct PanelNavigationPayload<'a> {
 struct PanelClosedPayload {
     reopen_petals: bool,
     debug_reminder_id: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelVisibilityPayload {
+    visible: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -94,6 +101,15 @@ fn emit_panel_navigation(panel: &WebviewWindow, category: &str) -> Result<(), St
         .map_err(|_| "panel_navigation_failed".to_owned())
 }
 
+fn emit_panel_visibility(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    app.emit_to(
+        ORB_WINDOW,
+        ORB_PANEL_VISIBILITY_EVENT,
+        PanelVisibilityPayload { visible },
+    )
+    .map_err(|_| "panel_visibility_event_failed".to_owned())
+}
+
 fn lock_vault_before_panel_hide(app: &tauri::AppHandle) {
     app.state::<Arc<VaultState>>().lock();
     let _ = app.emit_to(PANEL_WINDOW, "vault:locked", ());
@@ -118,8 +134,7 @@ fn show_panel(app: &tauri::AppHandle, category: &str) -> Result<(), String> {
     panel
         .set_focus()
         .map_err(|_| "panel_focus_failed".to_owned())?;
-
-    Ok(())
+    emit_panel_visibility(app, true)
 }
 
 fn position_panel_near_orb(
@@ -206,6 +221,27 @@ pub fn open_panel(app: tauri::AppHandle, category: String) -> Result<(), String>
 #[tauri::command]
 pub fn show_settings(app: tauri::AppHandle) -> Result<(), String> {
     show_panel(&app, "settings")
+}
+
+#[tauri::command]
+pub fn hide_panel(app: tauri::AppHandle) -> Result<(), String> {
+    let panel = app
+        .get_webview_window(PANEL_WINDOW)
+        .ok_or_else(|| "panel_window_missing".to_owned())?;
+    panel.hide().map_err(|_| "panel_hide_failed".to_owned())?;
+    emit_panel_visibility(&app, false)
+}
+
+#[tauri::command]
+pub fn restore_panel(app: tauri::AppHandle) -> Result<(), String> {
+    let panel = app
+        .get_webview_window(PANEL_WINDOW)
+        .ok_or_else(|| "panel_window_missing".to_owned())?;
+    panel.show().map_err(|_| "panel_show_failed".to_owned())?;
+    panel
+        .set_focus()
+        .map_err(|_| "panel_focus_failed".to_owned())?;
+    emit_panel_visibility(&app, true)
 }
 
 #[tauri::command]
